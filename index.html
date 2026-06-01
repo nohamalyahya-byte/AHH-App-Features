@@ -663,7 +663,6 @@ const OFFLINE_NOTES={"Ob2-011":[{"noteId":"N0001","featureId":"Ob2-011","date":"
 
 
 const SHEET_API_URL = "https://script.google.com/macros/s/AKfycbx80_vTKMVJza4OPYkPHvm_LZ5EufLsdSZMnnAZmWm1NmGeZ0-XOlh9Gcx1bkvpxnzwqA/exec";
-
 const ADMIN_PASS_KEY = 'ah_features_admin_pass_v1';
 let isAdminMode = !!localStorage.getItem(ADMIN_PASS_KEY);
 
@@ -741,7 +740,7 @@ function apiPost(payload){
   const pass=localStorage.getItem(ADMIN_PASS_KEY)||'';
   return fetch(SHEET_API_URL,{method:'POST',body:JSON.stringify({...payload,adminPassword:pass})}).then(r=>r.json());
 }
-function adminText(){return lang==='ar'?{edit:'وضع التعديل',logout:'تسجيل خروج التعديل',readonly:'عرض فقط',admin:'وضع التعديل مفعل',pass:'أدخلي كلمة مرور التعديل',saved:'تم تفعيل وضع التعديل وحفظ الدخول على هذا المتصفح',off:'تم إيقاف وضع التعديل',denied:'كلمة المرور غير صحيحة أو غير مصرح',need:'هذه العملية متاحة للشخص المصرح فقط',roNote:'وضع العرض فقط: يمكن مشاهدة الملاحظات، لكن إضافة الملاحظات وتغيير الحالات متاحان فقط في وضع التعديل'}:{edit:'Edit Mode',logout:'Logout Edit',readonly:'Read Only',admin:'Edit Mode On',pass:'Enter edit password',saved:'Edit Mode enabled and saved on this browser',off:'Edit Mode disabled',denied:'Wrong password or unauthorized',need:'This action is available for the authorized person only',roNote:'Read-only mode: notes are visible, but adding notes and changing status are available only in Edit Mode'};}
+function adminText(){return lang==='ar'?{edit:'وضع التعديل',logout:'تسجيل خروج التعديل',readonly:'عرض فقط',admin:'وضع التعديل مفعل',pass:'أدخل كلمة مرور التعديل',saved:'تم تفعيل وضع التعديل وحفظ الدخول على هذا المتصفح',off:'تم إيقاف وضع التعديل',denied:'كلمة المرور غير صحيحة أو غير مصرح',need:'هذه العملية متاحة للشخص المصرح فقط',roNote:'وضع العرض فقط: يمكن مشاهدة الملاحظات، لكن إضافة الملاحظات وتغيير الحالات متاحان فقط في وضع التعديل'}:{edit:'Edit Mode',logout:'Logout Edit',readonly:'Read Only',admin:'Edit Mode On',pass:'Enter edit password',saved:'Edit Mode enabled and saved on this browser',off:'Edit Mode disabled',denied:'Wrong password or unauthorized',need:'This action is available for the authorized person only',roNote:'Read-only mode: notes are visible, but adding notes and changing status are available only in Edit Mode'};}
 function updateAccessUI(){
   const t=adminText(),btn=document.getElementById('adminBtn'),badge=document.getElementById('accessBadge');
   if(btn){btn.classList.toggle('on',isAdminMode);btn.innerHTML=svg(isAdminMode?'x':'check','icon-sm')+(isAdminMode?t.logout:t.edit);}
@@ -875,12 +874,41 @@ function assignDisplayNumbers(mains){
 }
 function loadOnline(initial){
   if(initial)showLoading();
-  return Promise.all([apiGet('getFeatures'),apiGet('getActivityLog')])
-    .then(([f,a])=>{
+  return Promise.all([apiGet('getFeatures'),apiGet('getActivityLog'),apiGet('getNotes')])
+    .then(([f,a,n])=>{
       if(!f||!f.ok||!Array.isArray(f.mainFeatures))throw new Error('bad features');
+
       DATA.mains=normalizeMains(f.mainFeatures);
-      DATA.activity=(a&&a.activity)?a.activity.map(x=>({id:x.activityId,fid:x.featureId,type:x.activityType,oldStatus:x.oldStatus,newStatus:x.newStatus,date:x.date,time:x.time})):[];
-      DATA.notes={};mode='online';reindex();renderShell();
+      DATA.activity=(a&&a.activity)?a.activity.map(x=>({
+        id:x.activityId,
+        fid:x.featureId,
+        type:x.activityType,
+        oldStatus:x.oldStatus,
+        newStatus:x.newStatus,
+        date:x.date,
+        time:x.time
+      })):[];
+
+      DATA.notes={};
+      if(n&&n.ok&&Array.isArray(n.notes)){
+        n.notes.forEach(nt=>{
+          const fid=String(nt.featureId||'').trim();
+          if(!fid)return;
+          if(!DATA.notes[fid])DATA.notes[fid]=[];
+          DATA.notes[fid].push({
+            noteId:nt.noteId||'',
+            featureId:fid,
+            date:nt.date||'',
+            time:nt.time||'',
+            source:nt.source||'User Note',
+            note:nt.note||''
+          });
+        });
+      }
+
+      mode='online';
+      reindex();
+      renderShell();
     })
     .catch(()=>{mode='error';renderShell();});
 }
@@ -1074,7 +1102,7 @@ function escapeAttr(s){return String(s==null?'':s).replace(/['"\\]/g,'\\$&');}
 function cssId(s){return String(s).replace(/[^a-zA-Z0-9_-]/g,'_');}
 function openNotes(id){currentFeatureId=id;const o=BY_ID[id];if(!o)return;
   document.getElementById('notesOverlay').classList.add('open');document.getElementById('noteText').value='';renderNotesPanel();setTimeout(()=>document.getElementById('noteText').focus(),120);
-  if(mode==='online')apiGet('getNotes',{featureId:id}).then(r=>{if(r&&r.notes){DATA.notes[id]=r.notes.map(n=>({noteId:n.noteId,featureId:id,date:n.date,time:n.time,source:n.source||'User Note',note:n.note||''}));if(currentFeatureId===id)renderNotesPanel();updateNoteCount(id);}}).catch(()=>{});}
+  if(mode==='online')apiGet('getNotes',{featureId:id}).then(r=>{if(r&&r.ok&&Array.isArray(r.notes)){DATA.notes[id]=r.notes.map(n=>({noteId:n.noteId||'',featureId:id,date:n.date||'',time:n.time||'',source:n.source||'User Note',note:n.note||''}));if(currentFeatureId===id)renderNotesPanel();updateNoteCount(id);}}).catch(()=>{});}
 function closeNotes(){document.getElementById('notesOverlay').classList.remove('open');}
 function closeNotesOutside(e){if(e.target.id==='notesOverlay')closeNotes();}
 function updateNoteCount(id){const row=document.getElementById('sub-'+cssId(id));if(!row)return;const btn=row.querySelector('.note-btn');if(!btn)return;const nc=notesFor(id).length;btn.classList.toggle('has-notes',!!nc);btn.innerHTML=svg('note','icon-sm')+(nc?`<span class="note-count">${nc}</span>`:'');}
