@@ -1034,6 +1034,28 @@ function updateAccessUI(){
   if(badge){badge.textContent=isAdminMode?t.admin:t.readonly;badge.style.background=isAdminMode?'#F0FDF4':'#F8FAFC';badge.style.color=isAdminMode?'#22C55E':'#64748B';badge.style.borderColor=isAdminMode?'#BBF7D0':'#E2E8F0';}
   document.querySelectorAll('.status-select').forEach(el=>{el.disabled=!isAdminMode;});
   document.querySelectorAll('.note-add').forEach(el=>{el.classList.toggle('admin-only-hidden',!isAdminMode);});
+
+  // Activity Log is restricted to Edit Mode only.
+  const activityTab=document.querySelector('[data-view="activityView"]');
+  const activityView=document.getElementById('activityView');
+  if(activityTab){
+    activityTab.style.display=isAdminMode?'flex':'none';
+    activityTab.setAttribute('aria-hidden',isAdminMode?'false':'true');
+    activityTab.tabIndex=isAdminMode?0:-1;
+  }
+  if(activityView){
+    activityView.style.display=isAdminMode?'block':'none';
+    if(!isAdminMode && activityView.classList.contains('active')){
+      activityView.classList.remove('active');
+      const dashboard=document.getElementById('dashboardView');
+      const dashboardTab=document.querySelector('[data-view="dashboardView"]');
+      document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+      if(dashboard)dashboard.classList.add('active');
+      if(dashboardTab)dashboardTab.classList.add('active');
+      if(typeof renderDashboard==='function')renderDashboard(true);
+    }
+  }
+
   const ro=document.getElementById('noteReadonlyMessage');if(ro){ro.textContent=t.roNote;ro.style.display=isAdminMode?'none':'block';}
 }
 function toggleAdminMode(){
@@ -1520,8 +1542,17 @@ function i18n(){updateAccessUI();document.body.classList.toggle('ar',lang==='ar'
   document.getElementById('cmdInput').placeholder=lang==='ar'?'ابحثي في الخصائص والتصنيفات…':'Search features, sub-features, categories…';
   renderGuide();buildFilters();}
 function toggleLang(){const app=document.getElementById('app');app.classList.add('lang-fade');setTimeout(()=>{lang=lang==='en'?'ar':'en';localStorage.setItem('ah_lang',lang);renderShell();app.classList.remove('lang-fade');},190);}
-function switchView(id,btn){document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));document.getElementById(id).classList.add('active');
-  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');
+function switchView(id,btn){
+  if(id==='activityView'&&!isAdminMode){
+    updateAccessUI();
+    toast(adminText().need,'error');
+    return;
+  }
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  const target=document.getElementById(id);
+  if(target)target.classList.add('active');
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  if(btn)btn.classList.add('active');
   if(mode==='setup'||mode==='error'){fillState();return;}
   if(id==='dashboardView')renderDashboard(true);if(id==='trackerView')renderFeatures(!!selectedCategory);if(id==='activityView')refreshActivity();}
 
