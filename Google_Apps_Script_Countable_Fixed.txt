@@ -1,0 +1,404 @@
+/**
+ * Al Hammadi App Features Tracking Portal - Google Apps Script Backend
+ * Logic fixed: gray / header rows are NOT counted.
+ * Countable rows only:
+ *   Level = SubFeature
+ *   Is_Countable = TRUE
+ *   Is_Hidden != TRUE
+ *   Status != Not Used
+ */
+
+const FEATURES_SHEET = 'Features_Master';
+const NOTES_SHEET = 'Notes_History';
+const ACTIVITY_SHEET = 'Activity_Log';
+
+const STATUS_WEIGHT = {
+  'Available': 100,
+  'Partially Available': 50,
+  'Not Available': 0,
+  'Not Verified': 0
+};
+
+const VALID_STATUS = ['Available', 'Partially Available', 'Not Available', 'Not Verified'];
+
+const FEATURE_HEADERS = [
+  'Feature_ID','Parent_Feature_ID','Level','English_Name','Arabic_Name','Category',
+  'Main_Feature','Sub_Section','Phase','Priority','Status','Calculated_Status',
+  'Completion_Rate','Is_Countable','Is_Hidden','Last_Review_Date',
+  'Last_Updated_Date','Last_Updated_Time'
+];
+
+const NOTES_HEADERS = ['Note_ID','Feature_ID','Date','Time','Source','Note'];
+const ACTIVITY_HEADERS = ['Activity_ID','Feature_ID','Activity_Type','Old_Status','New_Status','Date','Time'];
+
+function doGet(e) {
+  const action = (e && e.parameter && e.parameter.action) || '';
+  try {
+    ensureSheets_();
+
+    if (action === 'getFeatures') return json_({ ok: true, mainFeatures: getFeatures_() });
+    if (action === 'getNotes') return json_({ ok: true, notes: getNotes_(e.parameter.featureId) });
+    if (action === 'getActivityLog') return json_({ ok: true, activity: getActivityLog_() });
+    if (action === 'getDashboardStats') return json_({ ok: true, stats: getDashboardStats_() });
+
+    return json_({ ok: false, error: 'Unknown action: ' + action });
+  } catch (err) {
+    return json_({ ok: false, error: String(err && err.message ? err.message : err) });
+  }
+}
+
+function doPost(e) {
+  try {
+    ensureSheets_();
+    const payload = JSON.parse((e && e.postData && e.postData.contents) || '{}');
+    const action = payload.action || '';
+
+    if (action === 'updateFeatureStatus') {
+      return json_(updateFeatureStatus_(payload.featureId, payload.newStatus));
+    }
+
+    if (action === 'saveNote') {
+      return json_(saveNote_(payload.featureId, payload.note, payload.source || 'User Note'));
+    }
+
+    return json_({ ok: false, error: 'Unknown action: ' + action });
+  } catch (err) {
+    return json_({ ok: false, error: String(err && err.message ? err.message : err) });
+  }
+}
+
+function getFeatures_() {
+  recalculateAllMainFeatures_();
+
+  const sh = SpreadsheetApp.getActive().getSheetByName(FEATURES_SHEET);
+  const values = sh.getDataRange().getValues();
+  if (values.length < 2) return [];
+
+  const headers = values[0].map(String);
+  const rows = values.slice(1).map(r => rowToObject_(headers, r)).filter(r => r.Feature_ID);
+
+  const mainRows = rows.filter(r => norm_(r.Level) === 'MainFeature');
+  const subSectionById = {};
+  rows.filter(r => norm_(r.Level) === 'SubSection').forEach(r => subSectionById[norm_(r.Feature_ID)] = r);
+
+  return mainRows.map(main => {
+    const mainId = norm_(main.Feature_ID);
+    const mainName = norm_(main.English_Name);
+
+    const subFeatures = rows
+      .filter(r => norm_(r.Level) === 'SubFeature')
+      .filter(r => {
+        const parentId = norm_(r.Parent_Feature_ID);
+        const parentSection = subSectionById[parentId];
+        return norm_(r.Main_Feature) === mainName ||
+               parentId === mainId ||
+               (parentSection && norm_(parentSection.Parent_Feature_ID) === mainId);
+      })
+      .map(r => {
+        const section = subSectionById[norm_(r.Parent_Feature_ID)] || {};
+        return {
+          featureId: norm_(r.Feature_ID),
+          parentFeatureId: mainId,
+          sectionId: norm_(r.Parent_Feature_ID),
+          level: norm_(r.Level) || 'SubFeature',
+          englishName: norm_(r.English_Name),
+          arabicName: norm_(r.Arabic_Name),
+          category: norm_(r.Category),
+          mainFeature: norm_(r.Main_Feature),
+          subSection: norm_(r.Sub_Section) || norm_(section.English_Name),
+          subSectionAr: norm_(section.Arabic_Name),
+          phase: norm_(r.Phase),
+          priority: norm_(r.Priority),
+          status: norm_(r.Status) || 'Not Verified',
+          calculatedStatus: norm_(r.Calculated_Status),
+          completionRate: r.Completion_Rate,
+          isCountable: isCountableRow_(r),
+          isHidden: isHiddenRow_(r),
+          originalStatus: norm_(r.Status),
+          lastReviewDate: dateStr_(r.Last_Review_Date),
+          lastUpdatedDate: dateStr_(r.Last_Updated_Date),
+          lastUpdatedTime: timeStr_(r.Last_Updated_Time)
+        };
+      });
+
+    const calc = calculateMain_(subFeatures);
+
+    return {
+      featureId: mainId,
+      parentFeatureId: norm_(main.Parent_Feature_ID),
+      level: 'MainFeature',
+      englishName: norm_(main.English_Name),
+      arabicName: norm_(main.Arabic_Name),
+      category: norm_(main.Category),
+      mainFeature: norm_(main.Main_Feature) || norm_(main.English_Name),
+      subSection: '',
+      phase: norm_(main.Phase),
+      priority: norm_(main.Priority),
+      status: calc.status,
+      calculatedStatus: calc.status,
+      completionRate: calc.completionRate,
+      isCountable: false,
+      isHidden: isHiddenRow_(main),
+      lastReviewDate: dateStr_(main.Last_Review_Date),
+      lastUpdatedDate: dateStr_(main.Last_Updated_Date),
+      lastUpdatedTime: timeStr_(main.Last_Updated_Time),
+      subFeatures: subFeatures
+    };
+  });
+}
+
+function updateFeatureStatus_(featureId, newStatus) {
+  featureId = norm_(featureId);
+  newStatus = norm_(newStatus);
+
+  if (!VALID_STATUS.includes(newStatus)) {
+    return { ok: false, error: 'Invalid status' };
+  }
+
+  const sh = SpreadsheetApp.getActive().getSheetByName(FEATURES_SHEET);
+  const values = sh.getDataRange().getValues();
+  const headers = values[0].map(String);
+  const col = indexMap_(headers);
+  const rowIndex = values.findIndex((r, i) => i > 0 && norm_(r[col.Feature_ID]) === featureId);
+
+  if (rowIndex < 1) return { ok: false, error: 'Feature ID not found' };
+
+  const rowObj = rowToObject_(headers, values[rowIndex]);
+  if (norm_(rowObj.Level) !== 'SubFeature') {
+    return { ok: false, error: 'Only SubFeature rows can be updated' };
+  }
+
+  const oldStatus = norm_(values[rowIndex][col.Status]);
+  sh.getRange(rowIndex + 1, col.Status + 1).setValue(newStatus);
+  sh.getRange(rowIndex + 1, col.Is_Countable + 1).setValue(true);
+  sh.getRange(rowIndex + 1, col.Is_Hidden + 1).setValue(false);
+  sh.getRange(rowIndex + 1, col.Last_Updated_Date + 1).setValue(new Date()).setNumberFormat('yyyy-mm-dd');
+  sh.getRange(rowIndex + 1, col.Last_Updated_Time + 1).setValue(new Date()).setNumberFormat('HH:mm:ss');
+
+  addActivity_(featureId, 'Status Change', oldStatus, newStatus);
+  recalculateAllMainFeatures_();
+
+  return { ok: true };
+}
+
+function saveNote_(featureId, note, source) {
+  featureId = norm_(featureId);
+  note = String(note || '').trim();
+  source = norm_(source) || 'User Note';
+
+  if (!featureId || !note) return { ok: false, error: 'Feature ID and note are required' };
+
+  const sh = SpreadsheetApp.getActive().getSheetByName(NOTES_SHEET);
+  const nextId = 'N' + String(Math.max(0, sh.getLastRow() - 1) + 1).padStart(4, '0');
+  const now = new Date();
+
+  sh.appendRow([nextId, featureId, now, now, source, note]);
+  sh.getRange(sh.getLastRow(), 3).setNumberFormat('yyyy-mm-dd');
+  sh.getRange(sh.getLastRow(), 4).setNumberFormat('HH:mm:ss');
+
+  addActivity_(featureId, 'Note Added', '', '');
+  return { ok: true, noteId: nextId };
+}
+
+function getNotes_(featureId) {
+  const sh = SpreadsheetApp.getActive().getSheetByName(NOTES_SHEET);
+  const values = sh.getDataRange().getValues();
+  if (values.length < 2) return [];
+
+  const headers = values[0].map(String);
+  const rows = values.slice(1).map(r => rowToObject_(headers, r));
+  const target = norm_(featureId);
+
+  return rows
+    .filter(r => !target || norm_(r.Feature_ID) === target)
+    .map(r => ({
+      noteId: norm_(r.Note_ID),
+      featureId: norm_(r.Feature_ID),
+      date: dateStr_(r.Date),
+      time: timeStr_(r.Time),
+      source: norm_(r.Source) || 'Initial Review',
+      note: String(r.Note || '')
+    }))
+    .reverse();
+}
+
+function getActivityLog_() {
+  const sh = SpreadsheetApp.getActive().getSheetByName(ACTIVITY_SHEET);
+  const values = sh.getDataRange().getValues();
+  if (values.length < 2) return [];
+
+  const headers = values[0].map(String);
+  return values.slice(1).map(r => rowToObject_(headers, r)).map(r => ({
+    activityId: norm_(r.Activity_ID),
+    featureId: norm_(r.Feature_ID),
+    activityType: norm_(r.Activity_Type),
+    oldStatus: norm_(r.Old_Status),
+    newStatus: norm_(r.New_Status),
+    date: dateStr_(r.Date),
+    time: timeStr_(r.Time)
+  })).reverse();
+}
+
+function getDashboardStats_() {
+  const features = getFeatures_();
+  const subFeatures = features.flatMap(m => m.subFeatures || []).filter(s => s.isCountable && !s.isHidden && VALID_STATUS.includes(s.status));
+  return calculateStats_(subFeatures);
+}
+
+function recalculateAllMainFeatures_() {
+  const sh = SpreadsheetApp.getActive().getSheetByName(FEATURES_SHEET);
+  const values = sh.getDataRange().getValues();
+  if (values.length < 2) return;
+
+  const headers = values[0].map(String);
+  const col = indexMap_(headers);
+  const rows = values.slice(1).map(r => rowToObject_(headers, r));
+  const subSections = {};
+  rows.filter(r => norm_(r.Level) === 'SubSection').forEach(r => subSections[norm_(r.Feature_ID)] = r);
+
+  rows.forEach((main, i) => {
+    if (norm_(main.Level) !== 'MainFeature') return;
+
+    const mainId = norm_(main.Feature_ID);
+    const mainName = norm_(main.English_Name);
+
+    const countableSubs = rows
+      .filter(r => norm_(r.Level) === 'SubFeature')
+      .filter(r => {
+        const parentId = norm_(r.Parent_Feature_ID);
+        const parentSection = subSections[parentId];
+        return norm_(r.Main_Feature) === mainName ||
+               parentId === mainId ||
+               (parentSection && norm_(parentSection.Parent_Feature_ID) === mainId);
+      })
+      .filter(isCountableRow_);
+
+    const calc = calculateMain_(countableSubs.map(r => ({ status: norm_(r.Status) || 'Not Verified' })));
+
+    const sheetRow = i + 2;
+    sh.getRange(sheetRow, col.Calculated_Status + 1).setValue(calc.status);
+    sh.getRange(sheetRow, col.Completion_Rate + 1).setValue(calc.completionRate);
+    sh.getRange(sheetRow, col.Status + 1).setValue(calc.status);
+  });
+}
+
+function calculateMain_(items) {
+  const valid = (items || []).filter(x => VALID_STATUS.includes(norm_(x.status || x.Status)));
+  if (!valid.length) return { status: 'Not Verified', completionRate: 0 };
+
+  const available = valid.filter(x => norm_(x.status || x.Status) === 'Available').length;
+  const partial = valid.filter(x => norm_(x.status || x.Status) === 'Partially Available').length;
+  const notAvailable = valid.filter(x => norm_(x.status || x.Status) === 'Not Available').length;
+  const notVerified = valid.filter(x => norm_(x.status || x.Status) === 'Not Verified').length;
+
+  let status = 'Partially Available';
+  if (available === valid.length) status = 'Available';
+  else if (notAvailable === valid.length) status = 'Not Available';
+  else if (notVerified === valid.length) status = 'Not Verified';
+
+  const completionRate = Math.round(((available * 100 + partial * 50) / valid.length) * 100) / 100;
+  return { status, completionRate };
+}
+
+function calculateStats_(items) {
+  const total = items.length;
+  const available = items.filter(x => x.status === 'Available').length;
+  const partial = items.filter(x => x.status === 'Partially Available').length;
+  const notAvailable = items.filter(x => x.status === 'Not Available').length;
+  const notVerified = items.filter(x => x.status === 'Not Verified').length;
+  const completion = total ? Math.round(((available * 100 + partial * 50) / total) * 100) / 100 : 0;
+  return { total, available, partial, notAvailable, notVerified, completion };
+}
+
+function isCountableRow_(r) {
+  return norm_(r.Level) === 'SubFeature' &&
+         toBool_(r.Is_Countable) &&
+         !isHiddenRow_(r) &&
+         norm_(r.Status) !== 'Not Used' &&
+         VALID_STATUS.includes(norm_(r.Status) || 'Not Verified');
+}
+
+function isHiddenRow_(r) {
+  return toBool_(r.Is_Hidden) || norm_(r.Status) === 'Not Used';
+}
+
+function addActivity_(featureId, type, oldStatus, newStatus) {
+  const sh = SpreadsheetApp.getActive().getSheetByName(ACTIVITY_SHEET);
+  const id = 'A' + String(Math.max(0, sh.getLastRow() - 1) + 1).padStart(4, '0');
+  const now = new Date();
+
+  sh.appendRow([id, featureId, type, oldStatus || '', newStatus || '', now, now]);
+  sh.getRange(sh.getLastRow(), 6).setNumberFormat('yyyy-mm-dd');
+  sh.getRange(sh.getLastRow(), 7).setNumberFormat('HH:mm:ss');
+}
+
+function ensureSheets_() {
+  const ss = SpreadsheetApp.getActive();
+
+  const features = ss.getSheetByName(FEATURES_SHEET);
+  if (!features) throw new Error('Missing sheet: ' + FEATURES_SHEET);
+  ensureHeader_(features, FEATURE_HEADERS);
+
+  const notes = ss.getSheetByName(NOTES_SHEET) || ss.insertSheet(NOTES_SHEET);
+  ensureHeader_(notes, NOTES_HEADERS);
+
+  const activity = ss.getSheetByName(ACTIVITY_SHEET) || ss.insertSheet(ACTIVITY_SHEET);
+  ensureHeader_(activity, ACTIVITY_HEADERS);
+}
+
+function ensureHeader_(sheet, headers) {
+  if (sheet.getLastRow() === 0) {
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    return;
+  }
+
+  const current = sheet.getRange(1, 1, 1, Math.max(headers.length, sheet.getLastColumn())).getValues()[0].map(String);
+  const hasAny = current.some(v => v.trim());
+  if (!hasAny) sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+}
+
+function rowToObject_(headers, row) {
+  const o = {};
+  headers.forEach((h, i) => o[h] = row[i]);
+  return o;
+}
+
+function indexMap_(headers) {
+  const map = {};
+  headers.forEach((h, i) => map[h] = i);
+  FEATURE_HEADERS.forEach(h => {
+    if (map[h] === undefined) throw new Error('Missing required column: ' + h);
+  });
+  return map;
+}
+
+function norm_(v) {
+  return String(v === null || v === undefined ? '' : v).trim();
+}
+
+function toBool_(v) {
+  const s = norm_(v).toLowerCase();
+  return v === true || s === 'true' || s === '1' || s === 'yes' || s === 'y';
+}
+
+function dateStr_(v) {
+  if (!v) return '';
+  if (Object.prototype.toString.call(v) === '[object Date]') {
+    return Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  }
+  return norm_(v);
+}
+
+function timeStr_(v) {
+  if (!v) return '';
+  if (Object.prototype.toString.call(v) === '[object Date]') {
+    return Utilities.formatDate(v, Session.getScriptTimeZone(), 'HH:mm:ss');
+  }
+  return norm_(v);
+}
+
+function json_(obj) {
+  return ContentService
+    .createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}
