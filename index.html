@@ -218,6 +218,35 @@ body.ar .feature-card::before{left:auto;right:0}
 .fc-actions{display:flex;align-items:center;justify-content:flex-end;gap:9px;flex-wrap:wrap}
 .status-select{height:36px;border-radius:11px;border:1.5px solid color-mix(in srgb,var(--status-color) 58%,#fff);background:color-mix(in srgb,var(--status-color) 17%,#fff);color:var(--status-color);font-size:12px;font-weight:900;min-width:110px;padding:0 10px;transition:background var(--t) var(--ease),color var(--t) var(--ease),border-color var(--t) var(--ease),box-shadow var(--t-fast) var(--ease)}
 .status-select.flash{box-shadow:0 0 0 4px color-mix(in srgb,var(--status-color) 25%,transparent)}
+.status-select.saving{opacity:.7;cursor:progress}
+
+/* edited-row highlight (≈2s) */
+@keyframes rowEdited{0%{background:color-mix(in srgb,var(--status,#1855A4) 16%,transparent)}100%{background:transparent}}
+.sub-row.edited{animation:rowEdited 2s var(--ease) forwards;border-radius:12px}
+
+/* per-row last-updated label */
+.sub-updated{font-size:10px;color:var(--muted);font-weight:800;display:flex;align-items:center;gap:4px;margin-top:3px;opacity:.9}
+.sub-updated .icon{width:12px;height:12px}
+.sub-updated.fresh{color:var(--success)}
+
+/* save indicator pill (Saving… / Saved) */
+.save-indicator{display:none;align-items:center;gap:7px;height:42px;padding:0 13px;border-radius:12px;font-size:12px;font-weight:850;border:1px solid var(--border);background:rgba(255,255,255,.92);transition:all var(--t-fast) var(--ease)}
+.save-indicator.show{display:flex}
+.save-indicator .dot{width:9px;height:9px;border-radius:50%;flex:0 0 auto}
+.save-indicator.saving{color:var(--warning);border-color:#FCD9A3;background:var(--warning-bg)}
+.save-indicator.saving .dot{background:var(--warning);animation:savePulse .9s var(--ease) infinite}
+.save-indicator.saved{color:var(--success);border-color:#BBF7D0;background:var(--success-bg)}
+.save-indicator.saved .dot{background:var(--success)}
+.save-indicator.failed{color:var(--danger);border-color:#FECACA;background:var(--danger-bg)}
+.save-indicator.failed .dot{background:var(--danger)}
+@keyframes savePulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.7)}}
+
+/* filters action buttons (Collapse all / Clear) */
+.filter-actions{display:flex;align-items:center;gap:8px;margin-inline-start:auto}
+.filter-btn{height:42px;border:1px solid var(--border);background:rgba(255,255,255,.92);border-radius:12px;padding:0 13px;color:var(--primary);font-weight:850;font-size:12px;display:flex;align-items:center;gap:7px;transition:all var(--t-fast) var(--ease);white-space:nowrap}
+.filter-btn:hover{transform:translateY(-1px);box-shadow:var(--shadow-sm);border-color:var(--secondary)}
+.filter-btn:active{transform:translateY(0) scale(.98)}
+.filter-btn.clear{color:var(--neutral)}
 .note-btn{position:relative;height:36px;border:1px solid var(--primary-tint);background:var(--primary-soft);color:var(--primary);border-radius:11px;padding:0 12px;font-weight:850;font-size:11px;display:flex;align-items:center;gap:6px;transition:all var(--t-fast) var(--ease)}
 .note-btn:hover{background:var(--primary-tint);transform:translateY(-1px)}
 .note-btn.has-notes{border-color:var(--primary);background:#fff;box-shadow:var(--shadow-xs)}
@@ -820,6 +849,21 @@ body.ar .priority-4{background:#EAF8EF !important;border-color:#BFE8CE !importan
 body.ar .priority-5{background:#EAF6FF !important;border-color:#C4E4FF !important;color:#246B9A !important;}
 body.ar .priority-6{background:#F2EEFF !important;border-color:#D9CEFF !important;color:#6247A6 !important;}
 
+
+/* ===== Final fix: allow table rows to grow vertically, not cut text ===== */
+.sub-row{height:auto !important;min-height:unset !important;align-items:stretch !important;}
+.sub-main{align-items:flex-start !important;height:auto !important;overflow:visible !important;}
+.sub-name{
+  display:block !important;
+  overflow:visible !important;
+  text-overflow:unset !important;
+  white-space:normal !important;
+  -webkit-line-clamp:unset !important;
+  -webkit-box-orient:unset !important;
+}
+.exec-body{overflow:hidden;}
+.exec-card.open .exec-body{overflow:visible;}
+
 </style>
 </head>
 <body>
@@ -896,6 +940,11 @@ body.ar .priority-6{background:#F2EEFF !important;border-color:#D9CEFF !importan
         <select id="phaseFilter" onchange="renderFeatures()"></select>
         <select id="priorityFilter" onchange="renderFeatures()"></select>
         <select id="statusFilter" onchange="renderFeatures()"></select>
+        <div class="filter-actions">
+          <div class="save-indicator" id="saveIndicator"><span class="dot"></span><span id="saveIndicatorText"></span></div>
+          <button class="filter-btn rippleable" id="collapseAllBtn" onclick="collapseAll()" data-ic="layers"><span data-i18n="collapseAll">Collapse All</span></button>
+          <button class="filter-btn clear rippleable" id="clearFiltersBtn" onclick="clearFilters()" data-ic="x"><span data-i18n="clearFilters">Clear Filters</span></button>
+        </div>
       </div>
       <div class="feature-list" id="featureList"></div>
     </section>
@@ -979,7 +1028,8 @@ const ICON_PATHS={
   link:'<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
   alert:'<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
   refresh:'<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>',
-  lightbulb:'<path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5a6 6 0 0 0-12 0c0 1.3.5 2.6 1.5 3.5.8.8 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/>'
+  lightbulb:'<path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5a6 6 0 0 0-12 0c0 1.3.5 2.6 1.5 3.5.8.8 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/>',
+  clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'
 };
 function svg(name,cls){return `<svg class="icon ${cls||''}" viewBox="0 0 24 24" aria-hidden="true">${ICON_PATHS[name]||''}</svg>`;}
 function applyIcons(){document.querySelectorAll('[data-ic]').forEach(el=>{if(!el.querySelector('svg'))el.insertAdjacentHTML('afterbegin',svg(el.dataset.ic));});}
@@ -994,6 +1044,7 @@ const STR={
     allPhases:"All Phases",allPriorities:"All Priorities",allStatuses:"All Statuses",featureNotes:"Notes",phase:"Phase",priority:"Priority",status:"Status",
     search:"Search features...",notePlaceholder:"Write a note...",noNotes:"No notes yet.",
     statusUpdated:"Status updated",noteSaved:"Note saved",errorEmpty:"Please write a note first",syncing:"Syncing…",
+    saving:"Saving…",saved:"Saved",saveFailed:"Save failed",collapseAll:"Collapse All",clearFilters:"Clear Filters",lastUpdated:"Updated",justNow:"just now",
     noCatTitle:"No Category Selected",noCatText:"Select a category from the sidebar to view its main features.",
     noMatch:"No matching features",noMatchSub:"Try changing the search or filters.",
     noActivity:"No activity records yet",noActivitySub:"Status changes and notes added from the portal will appear here.",
@@ -1010,6 +1061,7 @@ const STR={
     allPhases:"كل المراحل",allPriorities:"كل الأولويات",allStatuses:"كل الحالات",featureNotes:"الملاحظات",phase:"المرحلة",priority:"الأولوية",status:"الحالة",
     search:"بحث في الخصائص...",notePlaceholder:"اكتب ملاحظة...",noNotes:"لا توجد ملاحظات بعد.",
     statusUpdated:"تم تحديث الحالة",noteSaved:"تم حفظ الملاحظة",errorEmpty:"يرجى كتابة ملاحظة أولاً",syncing:"جارٍ المزامنة…",
+    saving:"جارٍ الحفظ…",saved:"تم الحفظ",saveFailed:"تعذّر الحفظ",collapseAll:"إغلاق الكل",clearFilters:"مسح الفلاتر",lastUpdated:"آخر تحديث",justNow:"الآن",
     noCatTitle:"لم يتم تحديد تصنيف",noCatText:"اختر تصنيفًا من القائمة الجانبية لعرض خصائصه الرئيسية.",
     noMatch:"لا توجد خصائص مطابقة",noMatchSub:"حاول تغيير البحث أو الفلاتر.",
     noActivity:"لا توجد أنشطة مسجلة حالياً",noActivitySub:"ستظهر هنا تغييرات الحالة والملاحظات المضافة من البوابة.",
@@ -1321,13 +1373,19 @@ function renderCategorySummary(subs){const s=statCounts(subs);
   animateCounts(document.getElementById('categoryHero'));}
 function statusOptions(cur){const keys=Object.keys(STATUS).slice();if(cur&&!keys.includes(cur))keys.push(cur);
   return keys.map(k=>`<option value="${escapeAttr(k)}" ${k===cur?'selected':''}>${statusText(k)}</option>`).join('');}
+function subUpdatedHTML(s){
+  const d=String(s.lastUpdatedDate||'').trim(),t=String(s.lastUpdatedTime||'').trim();
+  if(!d&&!t)return '';
+  const when=formatActivityDate(d)+(t?(' · '+t):'');
+  return `<div class="sub-updated">${svg('clock','icon-sm')}${tr('lastUpdated')}: <span dir="ltr">${escapeHtml(when)}</span></div>`;
+}
 function subRow(s,index){const st=statusMeta(s.status),nc=notesFor(s.featureId).length;
   const baseNo=s.sectionDisplayNo||((s.displayNo||'').split('-')[0])||'';
   const rowNo=baseNo?`${baseNo}.${(index||0)+1}`:String((index||0)+1);
   return `<div class="sub-row" id="sub-${cssId(s.featureId)}" style="--status:${st.color}">
     <div class="sub-no">${rowNo}</div>
     <div class="sub-main"><div class="sub-names"><div class="sub-name">${escapeHtml(nameOf(s))}</div>
-      <div class="sub-meta"><span class="mini-badge phase-badge ${phaseClass(s.phase)}">${svg('layers')}${phaseLabel(s.phase)}</span><span class="mini-badge priority-badge ${priorityClass(s.priority)}">${svg('tag')}${escapeHtml(s.priority||'—')}</span><span class="fc-id">${escapeHtml(s.featureId)}</span></div></div></div>
+      <div class="sub-meta"><span class="mini-badge phase-badge ${phaseClass(s.phase)}">${svg('layers')}${phaseLabel(s.phase)}</span><span class="mini-badge priority-badge ${priorityClass(s.priority)}">${svg('tag')}${escapeHtml(s.priority||'—')}</span><span class="fc-id">${escapeHtml(s.featureId)}</span></div>${subUpdatedHTML(s)}</div></div>
     <div class="sub-phase"><span class="mini-badge phase-badge ${phaseClass(s.phase)}">${svg('layers')}${phaseLabel(s.phase)}</span></div>
     <div class="sub-priority"><span class="mini-badge priority-badge ${priorityClass(s.priority)}">${svg('tag')}${escapeHtml(s.priority||'—')}</span></div>
     <div class="sub-status-cell"><select class="status-select rippleable" ${!isAdminMode?'disabled':''} onchange="updateSubStatus('${escapeAttr(s.featureId)}',this.value)" style="--status-bg:${st.bg};--status-color:${st.color};--status-border:${st.border}">${statusOptions(s.status)}</select></div>
@@ -1349,12 +1407,19 @@ function execCard(m,idx){const pst=mainStatus(m),st=statusMeta(pst),comp=mainCom
         <div class="exec-comp"><div class="exec-comp-num"><b>${comp}</b><small>%</small></div><div class="exec-comp-track"><span style="width:${comp}%;background:${st.color}"></span></div></div>
         <span class="exec-arrow">${svg('chevron')}</span></div></button>
     <div class="exec-body"${open?' style="max-height:none"':''}><div class="exec-body-inner">${groupedSubSections(displaySubs).map(sectionBlock).join('')}</div></div></div>`;}
+function scrollMainToStart(card){
+  if(!card)return;
+  const topbar=document.querySelector('.top-nav');
+  const offset=(topbar?topbar.getBoundingClientRect().height:0)+14;
+  const y=window.scrollY+card.getBoundingClientRect().top-offset;
+  window.scrollTo({top:Math.max(0,y),behavior:'smooth'});
+}
 function toggleMain(id){const card=document.getElementById('main-'+cssId(id));if(!card)return;const body=card.querySelector('.exec-body');
   if(openMainId===id){openMainId=null;collapse(card,body);return;}
   if(openMainId){const prev=document.getElementById('main-'+cssId(openMainId));if(prev)collapse(prev,prev.querySelector('.exec-body'));}
-  openMainId=id;expand(card,body);if(card.scrollIntoView)card.scrollIntoView({behavior:'smooth',block:'nearest'});}
+  openMainId=id;expand(card,body);setTimeout(()=>scrollMainToStart(card),80);}
 function expand(card,body){card.classList.add('open');body.style.maxHeight=body.scrollHeight+'px';
-  body.addEventListener('transitionend',function te(ev){if(ev.propertyName==='max-height'&&card.classList.contains('open')){body.style.maxHeight='none';body.removeEventListener('transitionend',te);}});}
+  body.addEventListener('transitionend',function te(ev){if(ev.propertyName==='max-height'&&card.classList.contains('open')){body.style.maxHeight='none';body.removeEventListener('transitionend',te);setTimeout(()=>scrollMainToStart(card),20);}});}
 function collapse(card,body){card.classList.remove('open');body.style.maxHeight=body.scrollHeight+'px';requestAnimationFrame(()=>body.style.maxHeight='0px');}
 function mainNameMatch(m,q){return !q||(m.englishName||'').toLowerCase().includes(q)||(m.arabicName||'').includes(q)||(m.featureId||'').toLowerCase().includes(q)||subsOf(m).some(s=>subMatch(s,q));}
 function subMatch(s,q){return !q||(s.englishName||'').toLowerCase().includes(q)||(s.arabicName||'').includes(q)||(s.featureId||'').toLowerCase().includes(q);}
@@ -1378,29 +1443,130 @@ function emptyTrackerHTML(){return `<div class="empty"><div><svg class="empty-il
 /* ====================================================================
    STATUS UPDATE  (sub → server recalculates parent)
    ==================================================================== */
-function updateSubStatus(subId,newStatus){if(!requireAdmin()){paintFeatures();return;}const s=BY_ID[subId];if(!s||s.status===newStatus)return;
-  const prev=s.status;s.status=newStatus;
-  // optimistic visual
-  const row=document.getElementById('sub-'+cssId(subId));if(row){const st=statusMeta(newStatus);row.style.setProperty('--status',st.color);
-    const sel=row.querySelector('.status-select');sel.style.setProperty('--status-bg',st.bg);sel.style.setProperty('--status-color',st.color);sel.style.setProperty('--status-border',st.border);sel.classList.add('flash');setTimeout(()=>sel.classList.remove('flash'),340);}
-  if(mode==='online'){toast(tr('syncing'));
-    apiPost({action:'updateFeatureStatus',featureId:subId,newStatus})
-      .then(r=>{if(!r||!r.ok)throw new Error((r&&r.error)||'Update failed');return loadOnline(false);})
-      .then(()=>toast(tr('statusUpdated')))
-      .catch((err)=>{s.status=prev;toast((err&&err.message)|| (lang==='ar'?'تعذّر حفظ الحالة':'Update failed'),'error');paintFeatures();});
-    return;}
-  // offline preview: recalc parent locally + local activity
-  const n=today();if(newStatus==='Not Used'){s.isHidden=true;}else{s.isHidden=false;}
+function updateParentCard(parent){
+  if(!parent)return;
+  const c=recomputeMain(parent);
+  const card=document.getElementById('main-'+cssId(parent.featureId));
+  if(card){
+    const st=statusMeta(mainStatus(parent));
+    card.style.setProperty('--bar',st.color);
+    const chip=card.querySelector('.status-chip');
+    if(chip){chip.textContent=statusText(mainStatus(parent));chip.style.background=st.bg;chip.style.color=st.color;}
+    const cn=card.querySelector('.exec-comp-num b');if(cn)cn.textContent=c.comp;
+    const ct=card.querySelector('.exec-comp-track span');if(ct){ct.style.width=c.comp+'%';ct.style.background=st.color;}
+  }
+  if(selectedCategory){
+    const subs=mainsIn(selectedCategory).flatMap(subsOf),sc=statCounts(subs);
+    const subTitle=document.getElementById('selectedCategorySub');
+    if(subTitle)subTitle.textContent=`${mainsIn(selectedCategory).length} ${tr('features')} · ${sc.total} ${tr('subFeatures')} · ${tr('completion')} ${sc.comp}%`;
+    renderCategorySummary(subs);
+  }
+}
+/* ---- Save indicator (Saving… / Saved / Failed) ---- */
+let saveIndicatorTimer=null;
+function showSaveIndicator(state){
+  const box=document.getElementById('saveIndicator'),txt=document.getElementById('saveIndicatorText');
+  if(!box||!txt)return;
+  if(saveIndicatorTimer){clearTimeout(saveIndicatorTimer);saveIndicatorTimer=null;}
+  box.classList.remove('saving','saved','failed');
+  if(state==='saving'){box.classList.add('show','saving');txt.textContent=tr('saving');}
+  else if(state==='saved'){box.classList.add('show','saved');txt.textContent=tr('saved');
+    saveIndicatorTimer=setTimeout(()=>box.classList.remove('show'),2200);}
+  else if(state==='failed'){box.classList.add('show','failed');txt.textContent=tr('saveFailed');
+    saveIndicatorTimer=setTimeout(()=>box.classList.remove('show'),3200);}
+  else box.classList.remove('show');
+}
+
+/* ---- Debounced batch status saver ----
+   Rapid status changes are buffered, then flushed ~700ms after the last edit
+   as a single batch (one Saving… → Saved cycle). Filters & open card stay intact. */
+const SAVE_DEBOUNCE_MS=700;
+const pendingChanges={};   // subId -> {prev, next, parentId}
+let saveDebounceTimer=null;
+
+function markRowEdited(row){
+  if(!row)return;
+  row.classList.remove('edited');void row.offsetWidth;   // restart animation
+  row.classList.add('edited');
+  setTimeout(()=>row.classList.remove('edited'),2100);
+}
+function setRowUpdatedLabel(s){
+  const row=document.getElementById('sub-'+cssId(s.featureId));if(!row)return;
+  const host=row.querySelector('.sub-names');if(!host)return;
+  let el=host.querySelector('.sub-updated');
+  const when=formatActivityDate(s.lastUpdatedDate||'')+((s.lastUpdatedTime)?(' · '+s.lastUpdatedTime):'');
+  const html=`${svg('clock','icon-sm')}${tr('lastUpdated')}: <span dir="ltr">${escapeHtml(when)}</span>`;
+  if(!el){el=document.createElement('div');el.className='sub-updated';host.appendChild(el);}
+  el.innerHTML=html;el.classList.add('fresh');
+  setTimeout(()=>el.classList.remove('fresh'),2200);
+}
+function paintRowStatus(s,disabled){
+  const row=document.getElementById('sub-'+cssId(s.featureId));if(!row)return;
+  const st=statusMeta(s.status);row.style.setProperty('--status',st.color);
+  const sel=row.querySelector('.status-select');
+  if(sel){sel.value=s.status;sel.disabled=!!disabled||!isAdminMode;
+    sel.classList.toggle('saving',!!disabled);
+    sel.style.setProperty('--status-bg',st.bg);sel.style.setProperty('--status-color',st.color);sel.style.setProperty('--status-border',st.border);}
+}
+
+function flushStatusSaves(){
+  saveDebounceTimer=null;
+  const ids=Object.keys(pendingChanges);
+  if(!ids.length)return;
+  const batch=ids.map(id=>({id,...pendingChanges[id]}));
+  for(const id in pendingChanges)delete pendingChanges[id];
+
+  const reenable=()=>batch.forEach(c=>{const sel=document.querySelector('#sub-'+cssId(c.id)+' .status-select');if(sel){sel.disabled=!isAdminMode;sel.classList.remove('saving');}});
+  const stamp=()=>{const n=today();batch.forEach(c=>{const s=BY_ID[c.id];if(s){s.lastUpdatedDate=n.date;s.lastUpdatedTime=n.time;setRowUpdatedLabel(s);}});};
+
+  if(mode==='online'){
+    showSaveIndicator('saving');
+    Promise.all(batch.map(c=>
+      apiPost({action:'updateFeatureStatus',featureId:c.id,newStatus:c.next})
+        .then(r=>{if(!r||!r.ok)throw new Error((r&&r.error)||'Update failed');return{c,ok:true};})
+        .catch(()=>({c,ok:false}))
+    )).then(results=>{
+      const failed=results.filter(r=>!r.ok).map(r=>r.c);
+      reenable();
+      if(failed.length){
+        failed.forEach(c=>{const s=BY_ID[c.id];if(s){s.status=c.prev;s.isHidden=(c.prev==='Not Used');paintRowStatus(s,false);updateParentCard(BY_ID[c.parentId]);}});
+        showSaveIndicator('failed');
+      }else{stamp();showSaveIndicator('saved');}
+    });
+    return;
+  }
+
+  // offline: log activity + persist locally
+  const n=today();
+  batch.forEach(c=>{const s=BY_ID[c.id];if(s){s.lastUpdatedDate=n.date;s.lastUpdatedTime=n.time;}
+    DATA.activity.unshift({id:'A'+String(DATA.activity.length+1).padStart(4,'0'),fid:c.id,type:'Status Change',oldStatus:c.prev,newStatus:c.next,date:n.date,time:n.time});});
+  persistOffline();reenable();stamp();showSaveIndicator('saved');
+}
+
+function updateSubStatus(subId,newStatus){
+  if(!requireAdmin()){paintFeatures();return;}
+  const s=BY_ID[subId];
+  if(!s||s.status===newStatus)return;
   const parent=BY_ID[s.mainFeatureId||s.parentFeatureId];
-  DATA.activity.unshift({id:'A'+String(DATA.activity.length+1).padStart(4,'0'),fid:subId,type:'Status Change',oldStatus:prev,newStatus,date:n.date,time:n.time});
-  if(parent){const c=recomputeMain(parent);
-    const card=document.getElementById('main-'+cssId(parent.featureId));if(card){const st=statusMeta(mainStatus(parent));card.style.setProperty('--bar',st.color);
-      const chip=card.querySelector('.status-chip');if(chip){chip.textContent=statusText(mainStatus(parent));chip.style.background=st.bg;chip.style.color=st.color;}
-      const cn=card.querySelector('.exec-comp-num b');if(cn)cn.textContent=c.comp;const ct=card.querySelector('.exec-comp-track span');if(ct){ct.style.width=c.comp+'%';ct.style.background=st.color;}}}
-  if(selectedCategory){const subs=mainsIn(selectedCategory).flatMap(subsOf),sc=statCounts(subs);
-    document.getElementById('selectedCategorySub').textContent=`${mainsIn(selectedCategory).length} ${tr('features')} · ${sc.total} ${tr('subFeatures')} · ${tr('completion')} ${sc.comp}%`;
-    document.querySelectorAll('#categoryHero [data-count]').forEach(e=>e.dataset.done='0');renderCategorySummary(subs);}
-  persistOffline();toast(tr('statusUpdated'));}
+
+  // keep original prev (before any unsaved edit in this burst) for correct rollback
+  const prev=(pendingChanges[subId]?pendingChanges[subId].prev:s.status);
+
+  // Optimistic UI: update model + row immediately, no reload → filters & open card preserved.
+  s.status=newStatus;
+  s.isHidden=(newStatus==='Not Used');
+  paintRowStatus(s,true);          // disabled while pending
+  const row=document.getElementById('sub-'+cssId(subId));
+  if(row){const sel=row.querySelector('.status-select');if(sel){sel.classList.add('flash');setTimeout(()=>sel.classList.remove('flash'),340);}}
+  markRowEdited(row);
+  updateParentCard(parent);
+
+  // queue + debounce
+  pendingChanges[subId]={prev,next:newStatus,parentId:parent?parent.featureId:null};
+  showSaveIndicator('saving');
+  if(saveDebounceTimer)clearTimeout(saveDebounceTimer);
+  saveDebounceTimer=setTimeout(flushStatusSaves,SAVE_DEBOUNCE_MS);
+}
 
 /* ====================================================================
    NOTES
@@ -1508,11 +1674,24 @@ function cmdSelect(i){const it=cmdItems[i];if(!it)return;closeCmd();
 /* ====================================================================
    FILTERS / i18n / VIEWS
    ==================================================================== */
+function collapseAll(){
+  if(openMainId){const card=document.getElementById('main-'+cssId(openMainId));if(card)collapse(card,card.querySelector('.exec-body'));}
+  openMainId=null;
+}
+function clearFilters(){
+  const q=document.getElementById('searchInput');if(q)q.value='';
+  ['phaseFilter','priorityFilter','statusFilter'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='All';});
+  renderFeatures();
+}
 function buildFilters(){const ph=document.getElementById('phaseFilter'),pr=document.getElementById('priorityFilter'),st=document.getElementById('statusFilter');
+  const prevPh=ph.value||'All',prevPr=pr.value||'All',prevSt=st.value||'All';   // keep selections across language switch
   ph.innerHTML=`<option value="All">${tr('allPhases')}</option>`+PHASES.map(p=>`<option value="${p}">${phaseLabel(p)}</option>`).join('');
   const pris=[...new Set(allSubs().map(s=>s.priority).filter(Boolean))].sort();
   pr.innerHTML=`<option value="All">${tr('allPriorities')}</option>`+pris.map(p=>`<option value="${escapeAttr(p)}">${escapeHtml(p)}</option>`).join('');
-  st.innerHTML=`<option value="All">${tr('allStatuses')}</option>`+CANON.map(s=>`<option value="${s}">${statusText(s)}</option>`).join('');}
+  st.innerHTML=`<option value="All">${tr('allStatuses')}</option>`+CANON.map(s=>`<option value="${s}">${statusText(s)}</option>`).join('');
+  if([...ph.options].some(o=>o.value===prevPh))ph.value=prevPh;
+  if([...pr.options].some(o=>o.value===prevPr))pr.value=prevPr;
+  if([...st.options].some(o=>o.value===prevSt))st.value=prevSt;}
 const GUIDE={
  en:{title:'Application Features Guide',close:'Close Guide',
   statusTitle:'Feature Status Definitions',
