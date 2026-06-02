@@ -362,7 +362,7 @@ body.ar .sub-row::before{left:auto;right:0}
 .exec-bar{position:absolute;inset:0 auto 0 0;width:6px;background:var(--bar);transition:background var(--t) var(--ease)}
 body.ar .exec-bar{left:auto;right:0}
 .exec-title-wrap{flex:1;min-width:0;padding-inline-start:8px}
-.exec-title{font-size:15px;font-weight:900;color:var(--primary-dark);line-height:1.35;letter-spacing:-.01em;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.exec-title{font-size:15px;font-weight:900;color:var(--primary-dark);line-height:1.35;letter-spacing:-.01em;display:-webkit-box;-webkit-line-clamp:unset !important;-webkit-box-orient:vertical;overflow:hidden}
 .exec-sub{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted);font-weight:700;margin-top:4px}
 .dot-sep{width:3px;height:3px;border-radius:50%;background:#CBD5E1}
 .exec-right{display:flex;align-items:center;gap:14px;flex:0 0 auto}
@@ -1550,7 +1550,7 @@ function i18n(){updateAccessUI();document.body.classList.toggle('ar',lang==='ar'
   document.querySelectorAll('[data-i18n]').forEach(el=>el.textContent=tr(el.dataset.i18n));
   document.getElementById('langBtn').innerHTML=svg('globe','icon-sm')+(lang==='ar'?'English':'العربية');
   document.getElementById('searchInput').placeholder=tr('search');document.getElementById('noteText').placeholder=tr('notePlaceholder');
-  document.getElementById('cmdInput').placeholder=lang==='ar'?'ابحثي في الخصائص والتصنيفات…':'Search features, sub-features, categories…';
+  document.getElementById('cmdInput').placeholder=lang==='ar'?'ابحث في الخصائص والتصنيفات…':'Search features, sub-features, categories…';
   renderGuide();buildFilters();}
 function toggleLang(){const app=document.getElementById('app');app.classList.add('lang-fade');setTimeout(()=>{lang=lang==='en'?'ar':'en';localStorage.setItem('ah_lang',lang);renderShell();app.classList.remove('lang-fade');},190);}
 function switchView(id,btn){
