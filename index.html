@@ -986,7 +986,7 @@ function applyIcons(){document.querySelectorAll('[data-ic]').forEach(el=>{if(!el
 
 /* ---------- Translations ---------- */
 const STR={
-  en:{brandTitle:"Al Hammadi App Features Tracking System",dashboard:"Dashboard",tracker:"Feature Tracker",activity:"Activity Log",
+  en:{brandTitle:"Al Hammadi App Features Tracking System",dashboard:"Dashboard",tracker:"Feature Tracker",activity:"Activity Log",activityLog:"Activity Log",
     categories:"Categories",quickFind:"Quick Find",overallStatus:"Status Distribution",completionRate:"Overall Completion",overallCompletion:"Overall Completion",
     phaseProgress:"Phase Progress",categoryProgress:"Category Progress",exportPdf:"Export PDF",preparingPdf:"Preparing PDF…",subSections:"Sub-Sections",saveNote:"Save Note",notesHistory:"Notes History",
     all:"All Features",totalFeatures:"Sub-Features",mainFeatures:"Main Features",available:"Available",partial:"Partially Available",
@@ -1002,7 +1002,7 @@ const STR={
     initialReview:"Initial Review",userNote:"User Note",
     setupTitle:"Connect to Google Sheets",setupText:"Paste your Apps Script Web App URL (ending with /exec) into SHEET_API_URL inside the file, then save and reopen. The portal will then read all data live from your sheet.",
     previewBtn:"Preview with offline data",offlineBadge:"Local data · saved on this device",errTitle:"Could not reach the data source",errText:"The Google Sheets API did not respond. Check the Web App URL and that access is set to Anyone, then retry.",retryBtn:"Retry",loading:"Loading data…"},
-  ar:{brandTitle:"نظام متابعة خصائص تطبيق مستشفيات الحمادي",dashboard:"لوحة المؤشرات",tracker:"متابعة الخصائص",activity:"سجل الأنشطة",
+  ar:{brandTitle:"نظام متابعة خصائص تطبيق مستشفيات الحمادي",dashboard:"لوحة المؤشرات",tracker:"متابعة الخصائص",activity:"سجل الأنشطة",activityLog:"سجل الأنشطة",
     categories:"التصنيفات",quickFind:"بحث سريع",overallStatus:"توزيع الحالات",completionRate:"نسبة الإنجاز الكلية",overallCompletion:"نسبة الإنجاز",
     phaseProgress:"تقدّم المراحل",categoryProgress:"تقدّم التصنيفات",exportPdf:"تصدير PDF",preparingPdf:"جارٍ تجهيز PDF…",subSections:"الأقسام الفرعية",saveNote:"حفظ الملاحظة",notesHistory:"سجل الملاحظات",
     all:"جميع الخصائص",totalFeatures:"الخصائص الفرعية",mainFeatures:"الخصائص الرئيسية",available:"متوفر",partial:"متوفر جزئياً",
@@ -1034,29 +1034,24 @@ function updateAccessUI(){
   if(badge){badge.textContent=isAdminMode?t.admin:t.readonly;badge.style.background=isAdminMode?'#F0FDF4':'#F8FAFC';badge.style.color=isAdminMode?'#22C55E':'#64748B';badge.style.borderColor=isAdminMode?'#BBF7D0':'#E2E8F0';}
   document.querySelectorAll('.status-select').forEach(el=>{el.disabled=!isAdminMode;});
   document.querySelectorAll('.note-add').forEach(el=>{el.classList.toggle('admin-only-hidden',!isAdminMode);});
+  const ro=document.getElementById('noteReadonlyMessage');if(ro){ro.textContent=t.roNote;ro.style.display=isAdminMode?'none':'block';}
 
-  // Activity Log is restricted to Edit Mode only.
-  const activityTab=document.querySelector('[data-view="activityView"]');
+  // Activity Log is available only in Edit Mode.
+  const activityTab=document.querySelector('.tab-btn[data-view="activityView"]');
   const activityView=document.getElementById('activityView');
-  if(activityTab){
-    activityTab.style.display=isAdminMode?'flex':'none';
-    activityTab.setAttribute('aria-hidden',isAdminMode?'false':'true');
-    activityTab.tabIndex=isAdminMode?0:-1;
-  }
-  if(activityView){
-    activityView.style.display=isAdminMode?'block':'none';
-    if(!isAdminMode && activityView.classList.contains('active')){
-      activityView.classList.remove('active');
-      const dashboard=document.getElementById('dashboardView');
-      const dashboardTab=document.querySelector('[data-view="dashboardView"]');
+  if(activityTab){activityTab.style.display=isAdminMode?'flex':'none';}
+  if(!isAdminMode){
+    if(activityView){activityView.classList.remove('active');}
+    const activeView=document.querySelector('.view.active');
+    if(!activeView || activeView.id==='activityView'){
+      const trackerBtn=document.querySelector('.tab-btn[data-view="trackerView"]');
+      const trackerView=document.getElementById('trackerView');
       document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
-      if(dashboard)dashboard.classList.add('active');
-      if(dashboardTab)dashboardTab.classList.add('active');
-      if(typeof renderDashboard==='function')renderDashboard(true);
+      document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+      if(trackerBtn)trackerBtn.classList.add('active');
+      if(trackerView)trackerView.classList.add('active');
     }
   }
-
-  const ro=document.getElementById('noteReadonlyMessage');if(ro){ro.textContent=t.roNote;ro.style.display=isAdminMode?'none':'block';}
 }
 function toggleAdminMode(){
   const t=adminText();
@@ -1445,19 +1440,35 @@ function saveNote(){if(!requireAdmin())return;const t=document.getElementById('n
    ==================================================================== */
 function actTs(a){return Date.parse(`${a.date} ${a.time}`)||Date.parse(a.date)||0;}
 function dateKey(s){const t=Date.parse(s);if(isNaN(t))return'';const d=new Date(t);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function formatActivityDate(v){
+  const s=String(v||'').trim();
+  if(!s)return '';
+  let m=s.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);
+  if(m){const y=m[1],mo=String(m[2]).padStart(2,'0'),d=String(m[3]).padStart(2,'0');return lang==='ar'?`${d}-${mo}-${y}`:`${y}-${mo}-${d}`;}
+  m=s.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})/);
+  if(m){const d=String(m[1]).padStart(2,'0'),mo=String(m[2]).padStart(2,'0'),y=m[3];return lang==='ar'?`${d}-${mo}-${y}`:`${y}-${mo}-${d}`;}
+  return s;
+}
+function activityDateTime(a){const d=formatActivityDate(a.date),t=String(a.time||'').trim();return d&&t?`${d} · ${t}`:(d||t||'');}
 function clearActivityDate(){const d=document.getElementById('activityDate');if(d)d.value='';renderActivity();}
 function activityTimeline(list){return `<div class="timeline">`+list.map((a,i)=>{const f=BY_ID[a.fid]||{englishName:a.fid,arabicName:''};const isStatus=a.type==='Status Change',typeLabel=isStatus?tr('statusChange'):tr('noteAdded');let desc;
   if(isStatus){const so=statusMeta(a.oldStatus),sn=statusMeta(a.newStatus);desc=`<span class="tl-status-chip" style="background:${so.bg};color:${so.color}">${statusText(a.oldStatus)}</span> → <span class="tl-status-chip" style="background:${sn.bg};color:${sn.color}">${statusText(a.newStatus)}</span>`;}
   else desc=escapeHtml(a.note||'');
   return `<div class="tl-item" style="animation-delay:${Math.min(i,12)*45}ms"><div class="tl-node ${isStatus?'':'note'}">${svg(isStatus?'activity':'note')}</div>
-    <div class="tl-card"><div class="tl-time">${svg('calendar','icon-sm')}${escapeHtml(String(a.date||''))} · ${escapeHtml(String(a.time||''))} · ${typeLabel}</div>
+    <div class="tl-card"><div class="tl-time">${svg('calendar','icon-sm')}<span dir="ltr">${escapeHtml(activityDateTime(a))}</span> · ${typeLabel}</div>
     <div class="tl-title">${escapeHtml(nameOf(f))} <span class="fc-id">${escapeHtml(a.fid)}</span></div><div class="tl-desc">${desc}</div></div></div>`;}).join('')+`</div>`;}
-function renderActivity(){if(mode!=='online'&&mode!=='offline')return;const el=document.getElementById('activityList');const sel=(document.getElementById('activityDate')||{}).value||'';
+function renderActivity(){
+  if(!isAdminMode){
+    const el=document.getElementById('activityList');
+    if(el)el.innerHTML='';
+    return;
+  }
+  if(mode!=='online'&&mode!=='offline')return;const el=document.getElementById('activityList');const sel=(document.getElementById('activityDate')||{}).value||'';
   let list=[...DATA.activity].sort((a,b)=>actTs(b)-actTs(a));if(sel)list=list.filter(a=>dateKey(a.date)===sel);
   if(!list.length){const msg=sel?tr('noActivityDate'):tr('noActivity'),sub=sel?tr('noActivityDateSub'):tr('noActivitySub');
     el.innerHTML=`<div class="empty"><div><svg class="empty-illustration" viewBox="0 0 200 200" fill="none"><circle cx="100" cy="100" r="58" stroke="#DCE8F8" stroke-width="9"/><path d="M100 66v36l24 14" stroke="#1855A4" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/></svg><h3>${msg}</h3><p>${sub}</p></div></div>`;return;}
   el.innerHTML=activityTimeline(list);}
-function refreshActivity(){if(mode==='online'){document.getElementById('activityList').innerHTML=skeletonCards(4,'sk-row');
+function refreshActivity(){if(!isAdminMode)return; if(mode==='online'){document.getElementById('activityList').innerHTML=skeletonCards(4,'sk-row');
   apiGet('getActivityLog').then(r=>{if(r&&r.activity)DATA.activity=r.activity.map(x=>({id:x.activityId,fid:x.featureId,type:x.activityType,oldStatus:x.oldStatus,newStatus:x.newStatus,date:x.date,time:x.time}));renderActivity();}).catch(()=>renderActivity());}
   else renderActivity();}
 /* dev/testing only — not exposed in the UI */
@@ -1543,16 +1554,9 @@ function i18n(){updateAccessUI();document.body.classList.toggle('ar',lang==='ar'
   renderGuide();buildFilters();}
 function toggleLang(){const app=document.getElementById('app');app.classList.add('lang-fade');setTimeout(()=>{lang=lang==='en'?'ar':'en';localStorage.setItem('ah_lang',lang);renderShell();app.classList.remove('lang-fade');},190);}
 function switchView(id,btn){
-  if(id==='activityView'&&!isAdminMode){
-    updateAccessUI();
-    toast(adminText().need,'error');
-    return;
-  }
-  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
-  const target=document.getElementById(id);
-  if(target)target.classList.add('active');
-  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
-  if(btn)btn.classList.add('active');
+  if(id==='activityView'&&!isAdminMode){toast(adminText().need,'error');return;}
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));document.getElementById(id).classList.add('active');
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');
   if(mode==='setup'||mode==='error'){fillState();return;}
   if(id==='dashboardView')renderDashboard(true);if(id==='trackerView')renderFeatures(!!selectedCategory);if(id==='activityView')refreshActivity();}
 
