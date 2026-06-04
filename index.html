@@ -1434,8 +1434,9 @@ function loadOnline(initial){
       renderShell();
       migrateLocalAddedToSheet(f.mainFeatures);
     })
-    .catch(()=>{mode='error';renderShell();});
+    .catch(()=>{onlineFailed=true;loadOffline();});
 }
+let onlineFailed=false;
 let _migratingAdded=false;
 function migrateLocalAddedToSheet(sheetMains){
   if(_migratingAdded||mode!=='online')return;
@@ -1456,6 +1457,14 @@ function loadOffline(){
   DATA.mains.forEach(m=>{(m.subFeatures||[]).forEach(x=>{if(sm[x.featureId])x.status=sm[x.featureId];});recomputeMain(m);});
   mergeAddedMains();
   mode='offline';reindex();renderShell();
+  if(onlineFailed){try{
+    var b=document.getElementById('ahOfflineBanner');
+    if(!b){b=document.createElement('div');b.id='ahOfflineBanner';
+      b.style.cssText='position:fixed;left:50%;transform:translateX(-50%);bottom:16px;z-index:9999;background:#1855A4;color:#fff;padding:8px 16px;border-radius:8px;font-size:13px;box-shadow:0 4px 14px rgba(0,0,0,.18);font-family:inherit;';
+      b.textContent=(typeof lang!=='undefined'&&lang==='en')?'Showing built-in data (cloud sync unavailable)':'يتم عرض البيانات المضمّنة (تعذّر الاتصال بالمزامنة السحابية)';
+      document.body.appendChild(b);setTimeout(function(){if(b)b.style.display='none';},6000);
+    }
+  }catch(e){}}
 }
 function refreshAll(){if(mode==='online')return loadOnline(false);if(mode==='offline'){reindex();renderShell();}return Promise.resolve();}
 
