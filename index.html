@@ -348,7 +348,7 @@ body.ar .toast-wrap{right:auto;left:20px}
 @media(max-width:900px){.layout{grid-template-columns:1fr}.category-sidebar{position:relative;top:0;height:auto}.cat-list{display:grid;grid-template-columns:1fr 1fr;overflow:visible}.feature-card{grid-template-columns:1fr}.fc-actions{justify-content:flex-start}.category-summary{grid-template-columns:repeat(2,1fr)}.kpi-grid{grid-template-columns:repeat(3,1fr)}.cmd-hint{display:none}}
 @media(max-width:640px){.top-nav{height:auto;position:sticky;flex-wrap:wrap;padding:12px;gap:10px}.main-tabs{width:100%;overflow:auto}.nav-actions{width:100%;justify-content:flex-end}.layout{padding:16px}.status-card-grid{grid-template-columns:1fr}.category-summary{grid-template-columns:1fr}.kpi-grid{grid-template-columns:repeat(2,1fr)}.filters{position:relative;top:0;flex-direction:column;align-items:stretch}.cat-list{grid-template-columns:1fr}.completion-num{font-size:46px}}
 @media(prefers-reduced-motion:reduce){*{animation-duration:.001ms!important;transition-duration:.001ms!important}}
-@media print{.category-sidebar,.filters,.note-btn,.status-select,.toast-wrap,.bd-toggle,.cmd-overlay,.cmd-hint,#pdfBtn,.main-tabs,.nav-actions{display:none!important}.top-nav{position:static;height:auto;background:#fff;box-shadow:none;border:0;border-bottom:2px solid #1855A4;padding:10px 0;backdrop-filter:none;-webkit-backdrop-filter:none}.layout{display:block;padding:0}body{background:#fff;zoom:1!important}.view{display:none!important}#dashboardView{display:block!important}.report-section,.status-card,.panel{box-shadow:none;border:1px solid #D7DEE8}.acc-body{max-height:none!important;opacity:1!important;transform:none!important}.acc{break-inside:avoid}.status-card.highlight{transform:none}}
+@media print{.category-sidebar,.filters,.note-btn,.status-select,.toast-wrap,.bd-toggle,.cmd-overlay,.cmd-hint,#pdfBtn,.main-tabs,.nav-actions{display:none!important}.top-nav{position:static;height:auto;background:#fff;box-shadow:none;border:0;border-bottom:2px solid #1855A4;padding:10px 0;backdrop-filter:none;-webkit-backdrop-filter:none}.layout{display:block;padding:0}body{background:#fff;zoom:1!important}.view{display:none!important}#dashboardView{display:block!important}.report-section,.status-card,.panel{box-shadow:none;border:1px solid #D7DEE8}.acc-body{max-height:none!important;height:auto!important;overflow:visible!important;opacity:1!important;transform:none!important;display:block!important}.acc,.breakdown-wrap,.section-body,.report-section{break-inside:auto!important}.kpi-cell,.acc-head,.status-card{break-inside:avoid}.status-card.highlight{transform:none}}
 
 /* ===== hierarchical tracker ===== */
 .tl-text{white-space:pre-wrap;word-break:break-word;line-height:1.7;margin-top:6px}
@@ -864,6 +864,25 @@ body.ar .priority-6{background:#F2EEFF !important;border-color:#D9CEFF !importan
 .exec-body{overflow:hidden;}
 .exec-card.open .exec-body{overflow:visible;}
 
+/* ===== Added: admin-only visibility + Add Main modal ===== */
+.admin-only{display:none !important;}
+body.is-admin .admin-only{display:flex !important;}
+body:not(.is-admin) .admin-tab{display:none !important;}
+.am-hidden{display:none !important;}
+.addmain-overlay{position:fixed;inset:0;z-index:200;background:rgba(15,23,42,.45);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;padding:20px;}
+.addmain-overlay.open{display:flex;}
+.addmain-box{width:min(560px,100%);max-height:88vh;overflow:auto;background:var(--card);border:1px solid var(--border);border-radius:var(--r-xl);box-shadow:var(--shadow-lg);display:flex;flex-direction:column;}
+.addmain-head{display:flex;align-items:center;justify-content:space-between;padding:18px 20px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--card);z-index:1;}
+.addmain-head h3{font-size:16px;font-weight:900;color:var(--primary-dark);}
+.addmain-body{padding:18px 20px;display:flex;flex-direction:column;gap:6px;}
+.am-label{font-size:12px;font-weight:800;color:var(--muted);margin-top:10px;}
+.am-input{width:100%;border:1px solid var(--border);border-radius:12px;padding:11px 12px;font-size:14px;background:#fff;color:var(--text);}
+textarea.am-input{min-height:70px;resize:vertical;line-height:1.6;}
+.am-grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:4px;}
+.addmain-actions{display:flex;gap:10px;justify-content:flex-end;padding:16px 20px;border-top:1px solid var(--border);position:sticky;bottom:0;background:var(--card);}
+@media(max-width:560px){.am-grid3{grid-template-columns:1fr;}}
+@media print{.admin-tab,.admin-only,#addMainBtn,#exportExcelBtn,#viewDashDetailsBtn{display:none !important;}}
+
 </style>
 </head>
 <body>
@@ -875,9 +894,10 @@ body.ar .priority-6{background:#F2EEFF !important;border-color:#D9CEFF !importan
     <div><h1 data-i18n="brandTitle">Al Hammadi App Features Tracking System</h1></div>
   </div>
   <nav class="main-tabs" aria-label="Main navigation">
-    <button class="tab-btn active rippleable" data-view="dashboardView" data-ic="dashboard" onclick="switchView('dashboardView',this)"><span data-i18n="dashboard">Dashboard</span></button>
+    <button class="tab-btn active rippleable" data-view="mainDashboardView" data-ic="dashboard" onclick="switchView('mainDashboardView',this)"><span data-i18n="dashboard">Dashboard</span></button>
     <button class="tab-btn rippleable" data-view="trackerView" data-ic="tracker" onclick="switchView('trackerView',this)"><span data-i18n="tracker">Feature Tracker</span></button>
-    <button class="tab-btn rippleable" data-view="activityView" data-ic="activity" onclick="switchView('activityView',this)"><span data-i18n="activity">Activity Log</span></button>
+    <button class="tab-btn rippleable admin-tab" id="dashDetailsTab" data-view="dashboardView" data-ic="gauge" onclick="switchView('dashboardView',this)"><span data-i18n="dashDetails">Dashboard Details</span></button>
+    <button class="tab-btn rippleable admin-tab" data-view="activityView" data-ic="activity" onclick="switchView('activityView',this)"><span data-i18n="activity">Activity Log</span></button>
   </nav>
   <div class="nav-actions">
     <button class="guide-btn rippleable" onclick="document.getElementById('guideModal').classList.add('open')" aria-label="Guide" title="الدليل التوضيحي / Guide"><span data-ic="lightbulb"></span></button>
@@ -894,8 +914,31 @@ body.ar .priority-6{background:#F2EEFF !important;border-color:#D9CEFF !importan
   </aside>
 
   <section class="content">
-    <!-- DASHBOARD -->
-    <section class="view active" id="dashboardView">
+    <!-- MAIN DASHBOARD (basic, Main-Feature level) -->
+    <section class="view active" id="mainDashboardView">
+      <div class="report-dashboard">
+        <section class="report-section" id="mainOverallSection">
+          <div class="report-section-head">
+            <span class="section-ic" data-ic="dashboard"></span>
+            <h2 class="report-title" data-i18n="overallStatus">Status Distribution</h2>
+            <div class="report-meta">
+              <span class="meta-chip" data-ic="layers" id="mainOverallTotalChip">0</span>
+              <button class="icon-btn rippleable admin-only" id="viewDashDetailsBtn" onclick="document.querySelector('.tab-btn[data-view=&quot;dashboardView&quot;]').click()" data-ic="gauge"><span data-i18n="viewDashDetails">View Dashboard Details</span></button>
+              <button class="primary-btn rippleable" id="mainPdfBtn" onclick="exportMainPDF()" data-ic="download"><span data-i18n="exportPdf">Export PDF</span></button>
+            </div>
+          </div>
+          <div class="section-body"><div class="status-card-grid" id="mainOverallCards"></div></div>
+        </section>
+
+        <section class="report-section" id="mainPhasesSection">
+          <div class="report-section-head"><span class="section-ic" data-ic="layers"></span><h2 class="report-title" data-i18n="phaseProgress">Phase Progress</h2></div>
+          <div class="section-body"><div class="breakdown-wrap" id="mainPhaseBreakdown"></div></div>
+        </section>
+      </div>
+    </section>
+
+    <!-- DASHBOARD DETAILS (edit mode only) -->
+    <section class="view" id="dashboardView">
       <div class="report-dashboard">
         <section class="report-section" id="overallSection">
           <div class="report-section-head">
@@ -942,6 +985,8 @@ body.ar .priority-6{background:#F2EEFF !important;border-color:#D9CEFF !importan
         <select id="statusFilter" onchange="renderFeatures()"></select>
         <div class="filter-actions">
           <div class="save-indicator" id="saveIndicator"><span class="dot"></span><span id="saveIndicatorText"></span></div>
+          <button class="filter-btn rippleable admin-only" id="addMainBtn" onclick="openAddMain()" data-ic="check"><span data-i18n="addMainFeature">Add Main Feature</span></button>
+          <button class="filter-btn rippleable" id="exportExcelBtn" onclick="exportExcel()" data-ic="download"><span data-i18n="exportExcel">Export to Excel</span></button>
           <button class="filter-btn rippleable" id="collapseAllBtn" onclick="collapseAll()" data-ic="layers"><span data-i18n="collapseAll">Collapse All</span></button>
           <button class="filter-btn clear rippleable" id="clearFiltersBtn" onclick="clearFilters()" data-ic="x"><span data-i18n="clearFilters">Clear Filters</span></button>
         </div>
@@ -984,6 +1029,40 @@ body.ar .priority-6{background:#F2EEFF !important;border-color:#D9CEFF !importan
   <div class="cmd-box" onclick="event.stopPropagation()">
     <div class="cmd-search"><span data-ic="search"></span><input id="cmdInput" placeholder="Search features, categories, phases…" oninput="renderCmd()" /><span class="cmd-esc">ESC</span></div>
     <div class="cmd-results" id="cmdResults"></div>
+  </div>
+</div>
+
+<div class="addmain-overlay" id="addMainOverlay" onclick="addMainOutside(event)">
+  <div class="addmain-box" onclick="event.stopPropagation()">
+    <div class="addmain-head">
+      <h3 id="addMainTitle">Add Main Feature</h3>
+      <button class="close-btn rippleable" onclick="closeAddMain()" data-ic="x"></button>
+    </div>
+    <div class="addmain-body">
+      <label class="am-label" id="amCategoryLabel">Category</label>
+      <select id="amCategory" class="am-input" onchange="amCategoryChanged()"></select>
+      <input id="amNewCategory" class="am-input am-hidden" placeholder="New category name" />
+
+      <label class="am-label" id="amMainNameLabel">Main Feature name</label>
+      <input id="amMainName" class="am-input" placeholder="Main feature name" />
+
+      <label class="am-label" id="amSubSectionLabel">Sub Section</label>
+      <select id="amSubSection" class="am-input" onchange="amSubSectionChanged()"></select>
+      <input id="amNewSubSection" class="am-input am-hidden" placeholder="New sub section name" />
+
+      <label class="am-label" id="amDetailsLabel">Details / Sub Feature</label>
+      <textarea id="amDetails" class="am-input" placeholder="Sub feature details"></textarea>
+
+      <div class="am-grid3">
+        <div><label class="am-label" id="amPhaseLabel">Phase</label><select id="amPhase" class="am-input"></select></div>
+        <div><label class="am-label" id="amPriorityLabel">Priority</label><select id="amPriority" class="am-input"></select></div>
+        <div><label class="am-label" id="amStatusLabel">Status</label><select id="amStatus" class="am-input"></select></div>
+      </div>
+    </div>
+    <div class="addmain-actions">
+      <button class="icon-btn rippleable" onclick="closeAddMain()" id="amCancelBtn">Cancel</button>
+      <button class="primary-btn rippleable" onclick="submitAddMain()" id="amSaveBtn" data-ic="check"><span id="amSaveLabel">Save</span></button>
+    </div>
   </div>
 </div>
 
@@ -1040,6 +1119,8 @@ const STR={
     categories:"Categories",quickFind:"Quick Find",overallStatus:"Status Distribution",completionRate:"Overall Completion",overallCompletion:"Overall Completion",
     phaseProgress:"Phase Progress",categoryProgress:"Category Progress",exportPdf:"Export PDF",preparingPdf:"Preparing PDF…",subSections:"Sub-Sections",saveNote:"Save Note",notesHistory:"Notes History",
     all:"All Features",totalFeatures:"Sub-Features",mainFeatures:"Main Features",available:"Available",partial:"Partially Available",
+    dashDetails:"Dashboard Details",viewDashDetails:"View Dashboard Details",addMainFeature:"Add Main Feature",exportExcel:"Export to Excel",
+    addNewCategory:"+ Add New Category",addNewSubSection:"+ Add New Sub Section",amCategory:"Category",amMainName:"Main Feature name",amSubSection:"Sub Section",amDetails:"Details / Sub Feature",amPhase:"Phase",amPriority:"Priority",amStatus:"Status",amSave:"Save",amCancel:"Cancel",amTitle:"Add Main Feature",amNewCatPh:"New category name",amNewSubPh:"New sub section name",amMainPh:"Main feature name",amDetailsPh:"Sub feature details",amAdded:"Main feature added",amNeedName:"Please enter the main feature and details",amNeedCat:"Please choose or enter a category",noneSub:"— None —",exportEmpty:"Nothing to export with the current filters",exported:"Excel file exported",mainCount:"Main Features",
     na:"Not Available",nv:"Not Verified",completion:"Completion",features:"main features",subFeatures:"sub-features",
     allPhases:"All Phases",allPriorities:"All Priorities",allStatuses:"All Statuses",featureNotes:"Notes",phase:"Phase",priority:"Priority",status:"Status",
     search:"Search features...",notePlaceholder:"Write a note...",noNotes:"No notes yet.",
@@ -1057,6 +1138,8 @@ const STR={
     categories:"التصنيفات",quickFind:"بحث سريع",overallStatus:"توزيع الحالات",completionRate:"نسبة الإنجاز الكلية",overallCompletion:"نسبة الإنجاز",
     phaseProgress:"تقدّم المراحل",categoryProgress:"تقدّم التصنيفات",exportPdf:"تصدير PDF",preparingPdf:"جارٍ تجهيز PDF…",subSections:"الأقسام الفرعية",saveNote:"حفظ الملاحظة",notesHistory:"سجل الملاحظات",
     all:"جميع الخصائص",totalFeatures:"الخصائص الفرعية",mainFeatures:"الخصائص الرئيسية",available:"متوفر",partial:"متوفر جزئياً",
+    dashDetails:"لوحة التحكم - التفاصيل",viewDashDetails:"عرض لوحة التحكم - التفاصيل",addMainFeature:"إضافة خاصية رئيسية",exportExcel:"تصدير إلى Excel",
+    addNewCategory:"+ إضافة تصنيف جديد",addNewSubSection:"+ إضافة قسم فرعي جديد",amCategory:"التصنيف",amMainName:"اسم الخاصية الرئيسية",amSubSection:"القسم الفرعي",amDetails:"التفاصيل / الخاصية الفرعية",amPhase:"المرحلة",amPriority:"الأولوية",amStatus:"الحالة",amSave:"حفظ",amCancel:"إلغاء",amTitle:"إضافة خاصية رئيسية",amNewCatPh:"اسم التصنيف الجديد",amNewSubPh:"اسم القسم الفرعي الجديد",amMainPh:"اسم الخاصية الرئيسية",amDetailsPh:"تفاصيل الخاصية الفرعية",amAdded:"تمت إضافة الخاصية الرئيسية",amNeedName:"يرجى إدخال اسم الخاصية الرئيسية والتفاصيل",amNeedCat:"يرجى اختيار أو إدخال تصنيف",noneSub:"— بدون —",exportEmpty:"لا توجد بيانات للتصدير حسب الفلاتر الحالية",exported:"تم تصدير ملف Excel",mainCount:"الخصائص الرئيسية",
     na:"غير متوفر",nv:"غير متحقق",completion:"الاكتمال",features:"خاصية رئيسية",subFeatures:"خاصية فرعية",
     allPhases:"كل المراحل",allPriorities:"كل الأولويات",allStatuses:"كل الحالات",featureNotes:"الملاحظات",phase:"المرحلة",priority:"الأولوية",status:"الحالة",
     search:"بحث في الخصائص...",notePlaceholder:"اكتب ملاحظة...",noNotes:"لا توجد ملاحظات بعد.",
@@ -1088,20 +1171,17 @@ function updateAccessUI(){
   document.querySelectorAll('.note-add').forEach(el=>{el.classList.toggle('admin-only-hidden',!isAdminMode);});
   const ro=document.getElementById('noteReadonlyMessage');if(ro){ro.textContent=t.roNote;ro.style.display=isAdminMode?'none':'block';}
 
-  // Activity Log is available only in Edit Mode.
-  const activityTab=document.querySelector('.tab-btn[data-view="activityView"]');
-  const activityView=document.getElementById('activityView');
-  if(activityTab){activityTab.style.display=isAdminMode?'flex':'none';}
+  // Edit-only views (Dashboard Details + Activity Log) are gated by the .admin-tab CSS.
+  document.body.classList.toggle('is-admin',isAdminMode);
   if(!isAdminMode){
-    if(activityView){activityView.classList.remove('active');}
     const activeView=document.querySelector('.view.active');
-    if(!activeView || activeView.id==='activityView'){
-      const trackerBtn=document.querySelector('.tab-btn[data-view="trackerView"]');
-      const trackerView=document.getElementById('trackerView');
+    if(activeView && (activeView.id==='activityView'||activeView.id==='dashboardView')){
+      const mainBtn=document.querySelector('.tab-btn[data-view="mainDashboardView"]');
+      const mainView=document.getElementById('mainDashboardView');
       document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
       document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
-      if(trackerBtn)trackerBtn.classList.add('active');
-      if(trackerView)trackerView.classList.add('active');
+      if(mainBtn)mainBtn.classList.add('active');
+      if(mainView)mainView.classList.add('active');
     }
   }
 }
@@ -1120,7 +1200,7 @@ function toggleAdminMode(){
 function requireAdmin(){if(isAdminMode)return true;toast(adminText().need,'error');return false;}
 
 /* ---------- State ---------- */
-let lang=localStorage.getItem('ah_lang')||'en';
+let lang=localStorage.getItem('ah_lang')||'ar';
 let mode='setup';                 // 'online' | 'offline' | 'setup' | 'error'
 let DATA={mains:[],notes:{},activity:[]};
 let selectedCategory=null,openMainId=null,currentFeatureId=null,cmdIndex=0,cmdItems=[];
@@ -1264,6 +1344,7 @@ function loadOnline(initial){
         });
       }
 
+      mergeAddedMains();
       mode='online';
       reindex();
       renderShell();
@@ -1277,6 +1358,7 @@ function loadOffline(){
   DATA.activity=JSON.parse(localStorage.getItem(LS.act)||'[]');
   const sm=JSON.parse(localStorage.getItem(LS.status)||'{}');
   DATA.mains.forEach(m=>{(m.subFeatures||[]).forEach(x=>{if(sm[x.featureId])x.status=sm[x.featureId];});recomputeMain(m);});
+  mergeAddedMains();
   mode='offline';reindex();renderShell();
 }
 function refreshAll(){if(mode==='online')return loadOnline(false);if(mode==='offline'){reindex();renderShell();}return Promise.resolve();}
@@ -1288,9 +1370,11 @@ function renderShell(){updateAccessUI();
   i18n();applyIcons();
   if(mode==='setup'||mode==='error'){renderCategories(true);fillState();return;}
   renderCategories(false);
-  renderDashboard(true);
-  paintFeatures();
-  renderActivity();
+  renderMainDashboard(true);
+  const active=document.querySelector('.view.active'),aid=active?active.id:'mainDashboardView';
+  if(aid==='dashboardView')renderDashboard(true);
+  if(aid==='trackerView')paintFeatures();
+  if(aid==='activityView')renderActivity();
 }
 function stateBlock(kind){
   if(kind==='loading')return `<div class="state-block"><div class="spinner"></div><p>${tr('loading')}</p></div>`;
@@ -1298,6 +1382,8 @@ function stateBlock(kind){
   return `<div class="state-block"><div class="state-ic">${svg('link')}</div><h3>${tr('setupTitle')}</h3><p>${tr('setupText')}</p><button class="state-btn ghost rippleable" onclick="loadOffline()">${svg('layers','icon-sm')}${tr('previewBtn')}</button></div>`;
 }
 function showLoading(){['featureList','activityList'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=stateBlock('loading');});
+  const moc=document.getElementById('mainOverallCards');if(moc)moc.innerHTML=skeletonCards(4,'sk-card');
+  const mpb=document.getElementById('mainPhaseBreakdown');if(mpb)mpb.innerHTML=skeletonCards(4,'sk-row');
   document.getElementById('overallStatusCards').innerHTML=stateBlock('loading');document.getElementById('phaseBreakdown').innerHTML='';document.getElementById('categoryBreakdown').innerHTML='';
   document.getElementById('filters').classList.remove('show');document.getElementById('categorySummary').innerHTML='';}
 function fillState(){const k=mode;['featureList','activityList'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=stateBlock(k);});
@@ -1359,7 +1445,22 @@ function paintDashboard(){const mains=DATA.mains,subs=allSubs(),s=statCounts(sub
     return breakdownHTML(catLabel(cat),`${cmains.length} ${tr('mainFeatures')} · ${c.total} ${tr('subFeatures')}`,CAT_COLORS[cat]||'#64748B',i,pill,kpis,c.comp);
   }).join('');
   animateCounts(document.getElementById('overallSection'));animateCounts(document.getElementById('completionSection'));animateFills(document.getElementById('dashboardView'));}
-function exportPDF(){toast(tr('preparingPdf'),'pdf');document.querySelectorAll('#dashboardView .acc').forEach(a=>{if(!a.classList.contains('open'))toggleAcc(a.querySelector('.acc-head'));});setTimeout(()=>window.print(),700);}
+function prepDashboardForPrint(){
+  // Force every dashboard breakdown section fully open + natural height so
+  // native iPad/Safari print (share → print) never produces blank pages.
+  document.querySelectorAll('#dashboardView .acc').forEach(a=>{
+    a.classList.add('open');
+    const body=a.querySelector('.acc-body');
+    if(body){body.style.maxHeight='none';body.style.height='auto';}
+    a.querySelectorAll('[data-count]').forEach(e=>e.dataset.done='0');
+    a.querySelectorAll('[data-w]').forEach(e=>{e.dataset.wdone='0';e.style.width=(e.dataset.w||0)+'%';});
+  });
+  animateCounts(document.getElementById('dashboardView'));
+}
+// Run before ANY print path (the share/print button calls this too).
+window.addEventListener('beforeprint',prepDashboardForPrint);
+if(window.matchMedia){const mq=window.matchMedia('print');(mq.addEventListener?mq.addEventListener('change',e=>{if(e.matches)prepDashboardForPrint();}):mq.addListener&&mq.addListener(e=>{if(e.matches)prepDashboardForPrint();}));}
+function exportPDF(){toast(tr('preparingPdf'),'pdf');prepDashboardForPrint();setTimeout(()=>window.print(),700);}
 function renderDashboard(skeleton){if(mode!=='online'&&mode!=='offline')return;
   if(skeleton){document.getElementById('overallStatusCards').innerHTML=skeletonCards(4,'sk-card');document.getElementById('completionFill').style.width='0';
     document.getElementById('phaseBreakdown').innerHTML=skeletonCards(3,'sk-row');document.getElementById('categoryBreakdown').innerHTML=skeletonCards(3,'sk-row');setTimeout(paintDashboard,420);}else paintDashboard();}
@@ -1733,16 +1834,169 @@ function i18n(){updateAccessUI();document.body.classList.toggle('ar',lang==='ar'
   renderGuide();buildFilters();}
 function toggleLang(){const app=document.getElementById('app');app.classList.add('lang-fade');setTimeout(()=>{lang=lang==='en'?'ar':'en';localStorage.setItem('ah_lang',lang);renderShell();app.classList.remove('lang-fade');},190);}
 function switchView(id,btn){
-  if(id==='activityView'&&!isAdminMode){toast(adminText().need,'error');return;}
+  if((id==='activityView'||id==='dashboardView')&&!isAdminMode){toast(adminText().need,'error');return;}
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));document.getElementById(id).classList.add('active');
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');
   if(mode==='setup'||mode==='error'){fillState();return;}
+  if(id==='mainDashboardView')renderMainDashboard(true);
   if(id==='dashboardView')renderDashboard(true);if(id==='trackerView')renderFeatures(!!selectedCategory);if(id==='activityView')refreshActivity();}
 
 document.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'){e.preventDefault();openCmd();return;}
   const cmdOpen=document.getElementById('cmdOverlay').classList.contains('open');
   if(e.key==='Escape'){if(cmdOpen)closeCmd();else if(document.getElementById('notesOverlay').classList.contains('open'))closeNotes();}
   if(cmdOpen){if(e.key==='ArrowDown'){e.preventDefault();cmdMove(1);}if(e.key==='ArrowUp'){e.preventDefault();cmdMove(-1);}if(e.key==='Enter'){e.preventDefault();cmdSelect(cmdIndex);}}});
+
+/* ====================================================================
+   MAIN DASHBOARD (basic — Main-Feature level)  + ADD MAIN FEATURE + EXPORT
+   ==================================================================== */
+function phaseSubsOf(m,phase){return subsOf(m).filter(s=>s.phase===phase);}
+function mainStatusPhase(m,phase){
+  const t=phaseSubsOf(m,phase).filter(s=>CANON.includes(s.status));
+  if(!t.length)return null;
+  const a=t.filter(s=>s.status==='Available').length,p=t.filter(s=>s.status==='Partially Available').length,n=t.filter(s=>s.status==='Not Available').length,v=t.filter(s=>s.status==='Not Verified').length;
+  if(a===t.length)return'Available';
+  if(a===0&&p===0&&n===t.length)return'Not Available';
+  if(a===0&&p===0&&v===t.length)return'Not Verified';
+  return'Partially Available';
+}
+function mainCountsPhase(list,phase){
+  const st=list.map(m=>mainStatusPhase(m,phase)).filter(Boolean);
+  const total=st.length,a=st.filter(x=>x==='Available').length,p=st.filter(x=>x==='Partially Available').length,n=st.filter(x=>x==='Not Available').length,v=st.filter(x=>x==='Not Verified').length;
+  return{total,available:a,partial:p,na:n,nv:v,comp:total?Math.round((a*100+p*50)/total*100)/100:0};
+}
+function paintMainDashboard(){
+  const mains=DATA.mains,c=mainCountsBy(mains);
+  const chip=document.getElementById('mainOverallTotalChip');if(chip)chip.innerHTML=svg('layers','icon-sm')+`${mains.length} ${tr('mainFeatures')}`;
+  const cards=document.getElementById('mainOverallCards');if(cards)cards.innerHTML=statusCardsHTML(c);
+  const dashKpis=(x)=>kpiCell(tr('overallCompletion'),x.comp,'#1855A4','%')+kpiCell(tr('available')+' %',pct(x.available,x.total),'#22C55E','%')+kpiCell(tr('partial')+' %',pct(x.partial,x.total),'#F59E0B','%')+kpiCell(tr('na')+' %',pct(x.na,x.total),'#DC2626','%')+kpiCell(tr('nv')+' %',pct(x.nv,x.total),'#64748B','%');
+  let html=breakdownHTML(tr('all'),`${mains.length} ${tr('mainFeatures')}`,'#1855A4',0,`<span class="bd-pill">${tr('overallCompletion')}: <b>${c.comp}%</b></span>`,kpiCell(tr('mainCount'),mains.length,'#7499C8')+dashKpis(c),c.comp);
+  PHASES.forEach((p,i)=>{const pc=mainCountsPhase(mains,p);
+    html+=breakdownHTML(phaseLabel(p),`${pc.total} ${tr('mainFeatures')}`,PHASE_ACCENT[p]||'#1855A4',i+1,`<span class="bd-pill">${tr('overallCompletion')}: <b>${pc.comp}%</b></span>`,kpiCell(tr('mainCount'),pc.total,'#7499C8')+dashKpis(pc),pc.comp);});
+  const host=document.getElementById('mainPhaseBreakdown');if(host)host.innerHTML=html;
+  animateCounts(document.getElementById('mainOverallSection'));animateFills(document.getElementById('mainDashboardView'));
+}
+function renderMainDashboard(skeleton){if(mode!=='online'&&mode!=='offline')return;
+  if(skeleton){const cards=document.getElementById('mainOverallCards');if(cards)cards.innerHTML=skeletonCards(4,'sk-card');
+    const host=document.getElementById('mainPhaseBreakdown');if(host)host.innerHTML=skeletonCards(4,'sk-row');setTimeout(paintMainDashboard,300);}
+  else paintMainDashboard();}
+function exportMainPDF(){toast(tr('preparingPdf'),'pdf');document.querySelectorAll('#mainDashboardView .acc').forEach(a=>{a.classList.add('open');const b=a.querySelector('.acc-body');if(b){b.style.maxHeight='none';b.style.height='auto';}a.querySelectorAll('[data-count]').forEach(e=>e.dataset.done='0');a.querySelectorAll('[data-w]').forEach(e=>{e.dataset.wdone='0';e.style.width=(e.dataset.w||0)+'%';});});animateCounts(document.getElementById('mainDashboardView'));setTimeout(()=>window.print(),700);}
+
+/* ---------- ADD MAIN FEATURE ---------- */
+const LS_ADDED='ah_added_mains_v1';
+function loadAddedMains(){try{return JSON.parse(localStorage.getItem(LS_ADDED)||'[]');}catch(e){return [];}}
+function saveAddedMains(arr){try{localStorage.setItem(LS_ADDED,JSON.stringify(arr));}catch(e){}}
+function mergeAddedMains(){const added=loadAddedMains();added.forEach(m=>{if(!DATA.mains.some(x=>x.featureId===m.featureId)){const cm=JSON.parse(JSON.stringify(m));cm.subFeatures=(cm.subFeatures||[]).map(x=>({...x,isCountable:!isFalseValue(x.isCountable),isHidden:String(x.isHidden).toLowerCase()==='true'||String(x.isHidden)==='1'||x.status==='Not Used'}));recomputeMain(cm);DATA.mains.push(cm);}});}
+function genMainId(){let i=1;while(DATA.mains.some(m=>m.featureId==='UM'+i))i++;return 'UM'+i;}
+function openAddMain(){
+  if(!requireAdmin())return;
+  document.getElementById('amCategoryLabel').textContent=tr('amCategory');
+  document.getElementById('amMainNameLabel').textContent=tr('amMainName');
+  document.getElementById('amSubSectionLabel').textContent=tr('amSubSection');
+  document.getElementById('amDetailsLabel').textContent=tr('amDetails');
+  document.getElementById('amPhaseLabel').textContent=tr('amPhase');
+  document.getElementById('amPriorityLabel').textContent=tr('amPriority');
+  document.getElementById('amStatusLabel').textContent=tr('amStatus');
+  document.getElementById('addMainTitle').textContent=tr('amTitle');
+  document.getElementById('amSaveLabel').textContent=tr('amSave');
+  document.getElementById('amCancelBtn').textContent=tr('amCancel');
+  document.getElementById('amNewCategory').placeholder=tr('amNewCatPh');
+  document.getElementById('amNewSubSection').placeholder=tr('amNewSubPh');
+  document.getElementById('amMainName').placeholder=tr('amMainPh');
+  document.getElementById('amDetails').placeholder=tr('amDetailsPh');
+  // Category options
+  const cats=catNames();
+  document.getElementById('amCategory').innerHTML=cats.map(c=>`<option value="${escapeAttr(c)}">${escapeHtml(catLabel(c))}</option>`).join('')+`<option value="__new__">${tr('addNewCategory')}</option>`;
+  document.getElementById('amNewCategory').classList.add('am-hidden');
+  document.getElementById('amNewCategory').value='';
+  document.getElementById('amMainName').value='';
+  document.getElementById('amDetails').value='';
+  // Phase / Priority / Status options
+  document.getElementById('amPhase').innerHTML=PHASES.map(p=>`<option value="${p}">${phaseLabel(p)}</option>`).join('');
+  const pris=[...new Set(allSubs().map(s=>s.priority).filter(Boolean))].sort();
+  document.getElementById('amPriority').innerHTML=pris.map(p=>`<option value="${escapeAttr(p)}">${escapeHtml(p)}</option>`).join('');
+  document.getElementById('amStatus').innerHTML=CANON.map(s=>`<option value="${s}">${statusText(s)}</option>`).join('');
+  buildAmSubSections();
+  document.getElementById('addMainOverlay').classList.add('open');
+}
+function closeAddMain(){document.getElementById('addMainOverlay').classList.remove('open');}
+function addMainOutside(e){if(e.target.id==='addMainOverlay')closeAddMain();}
+function amCategoryChanged(){const v=document.getElementById('amCategory').value;document.getElementById('amNewCategory').classList.toggle('am-hidden',v!=='__new__');buildAmSubSections();}
+function buildAmSubSections(){
+  const cat=document.getElementById('amCategory').value;
+  let subsecs=[];
+  if(cat&&cat!=='__new__'){const seen={};mainsIn(cat).forEach(m=>(m.subFeatures||[]).forEach(s=>{const en=s.subSection||'',ar=s.subSectionAr||'';if(en&&!seen[en]){seen[en]=true;subsecs.push({en,ar});}}));}
+  const sel=document.getElementById('amSubSection');
+  sel.innerHTML=`<option value="__none__">${tr('noneSub')}</option>`+subsecs.map((s,i)=>`<option value="${i}" data-en="${escapeAttr(s.en)}" data-ar="${escapeAttr(s.ar)}">${escapeHtml(lang==='ar'?(s.ar||s.en):s.en)}</option>`).join('')+`<option value="__new__">${tr('addNewSubSection')}</option>`;
+  amSubSectionChanged();
+}
+function amSubSectionChanged(){const v=document.getElementById('amSubSection').value;document.getElementById('amNewSubSection').classList.toggle('am-hidden',v!=='__new__');}
+function submitAddMain(){
+  if(!requireAdmin())return;
+  let cat=document.getElementById('amCategory').value;
+  if(cat==='__new__')cat=document.getElementById('amNewCategory').value.trim();
+  if(!cat){toast(tr('amNeedCat'),'error');return;}
+  const mainName=document.getElementById('amMainName').value.trim();
+  const details=document.getElementById('amDetails').value.trim();
+  if(!mainName||!details){toast(tr('amNeedName'),'error');return;}
+  const ssSel=document.getElementById('amSubSection'),ssVal=ssSel.value;let ssEn='',ssAr='';
+  if(ssVal==='__new__'){ssEn=document.getElementById('amNewSubSection').value.trim();ssAr=ssEn;}
+  else if(ssVal!=='__none__'){const opt=ssSel.options[ssSel.selectedIndex];ssEn=opt.getAttribute('data-en')||'';ssAr=opt.getAttribute('data-ar')||ssEn;}
+  const phase=document.getElementById('amPhase').value,priority=document.getElementById('amPriority').value,status=document.getElementById('amStatus').value;
+  const mid=genMainId(),sid=mid+'-001';const n=today();const dno=String(DATA.mains.length+1);
+  const main={featureId:mid,displayNo:dno,parentFeatureId:'',level:'MainFeature',englishName:mainName,arabicName:mainName,category:cat,mainFeature:mainName,subSection:'',phase:'',priority:priority,status:status,calculatedStatus:status,completionRate:0,isCountable:false,isHidden:false,lastReviewDate:'',lastUpdatedDate:n.date,lastUpdatedTime:n.time,
+    subFeatures:[{featureId:sid,displayNo:dno+'.1-01',sectionDisplayNo:dno+'.1',parentFeatureId:mid,mainFeatureId:mid,sectionId:mid+'.S1',level:'SubFeature',englishName:details,arabicName:details,category:cat,mainFeature:mainName,subSection:ssEn,subSectionAr:ssAr,phase:phase,priority:priority,status:status,calculatedStatus:'',completionRate:'',isCountable:true,isHidden:false,originalStatus:status,lastReviewDate:'',lastUpdatedDate:n.date,lastUpdatedTime:n.time}]};
+  DATA.mains.push(main);
+  const added=loadAddedMains();added.push(main);saveAddedMains(added);
+  reindex();recomputeMain(main);
+  if(mode==='offline')persistOffline();
+  closeAddMain();
+  renderCategories(false);renderMainDashboard(false);
+  const active=document.querySelector('.view.active');if(active&&active.id==='dashboardView')renderDashboard(false);
+  if(active&&active.id==='trackerView')paintFeatures();
+  toast(tr('amAdded'),'check');
+}
+
+/* ---------- EXPORT TO EXCEL (filtered, self-contained .xls) ---------- */
+function currentTrackerRows(){
+  // Returns the sub-features currently visible under the active filters/category.
+  const rows=[];
+  const base=selectedCategory?mainsIn(selectedCategory):DATA.mains;
+  const q=(document.getElementById('searchInput')||{}).value||'';const ql=q.toLowerCase().trim();
+  const ph=(document.getElementById('phaseFilter')||{}).value||'All';
+  const pr=(document.getElementById('priorityFilter')||{}).value||'All';
+  const stt=(document.getElementById('statusFilter')||{}).value||'All';
+  base.forEach(m=>{const mn=mainNameMatch(m,ql);
+    displaySubsOf(m).forEach(s=>{
+      if(stt==='Not Used'){if(s.status!=='Not Used')return;}else if(s.status==='Not Used')return;
+      if(!(ph==='All'||s.phase===ph))return;
+      if(!(pr==='All'||s.priority===pr))return;
+      if(!(stt==='All'||s.status===stt))return;
+      if(ql&&!mn&&!subMatch(s,ql))return;
+      rows.push({m,s});
+    });
+  });
+  return rows;
+}
+function exportExcel(){
+  const rows=currentTrackerRows();
+  if(!rows.length){toast(tr('exportEmpty'),'error');return;}
+  const headers=['Category','Main Feature','Sub Section','Sub Feature','Phase','Priority','Status','Last Updated','Notes'];
+  const esc=v=>escapeHtml(String(v==null?'':v));
+  let html='<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="UTF-8"></head><body><table border="1"><tr>'+headers.map(h=>`<th>${esc(h)}</th>`).join('')+'</tr>';
+  rows.forEach(({m,s})=>{
+    const notes=notesFor(s.featureId).map(n=>n.note).filter(Boolean).join(' | ');
+    const lu=(s.lastUpdatedDate||'')+(s.lastUpdatedTime?(' '+s.lastUpdatedTime):'');
+    const cells=[m.category||'',nameOf(m),(lang==='ar'?(s.subSectionAr||s.subSection):s.subSection)||'',nameOf(s),s.phase||'',s.priority||'',s.status||'',lu,notes];
+    html+='<tr>'+cells.map(c=>`<td>${esc(c)}</td>`).join('')+'</tr>';
+  });
+  html+='</table></body></html>';
+  const blob=new Blob(['\ufeff'+html],{type:'application/vnd.ms-excel;charset=utf-8'});
+  const url=URL.createObjectURL(blob),a=document.createElement('a');
+  const stamp=today().date;
+  a.href=url;a.download=`AlHammadi_Features_${stamp}.xls`;document.body.appendChild(a);a.click();
+  setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},500);
+  toast(tr('exported'),'check');
+}
 
 /* ====================================================================
    INIT
