@@ -348,7 +348,7 @@ body.ar .toast-wrap{right:auto;left:20px}
 @media(max-width:900px){.layout{grid-template-columns:1fr}.category-sidebar{position:relative;top:0;height:auto}.cat-list{display:grid;grid-template-columns:1fr 1fr;overflow:visible}.feature-card{grid-template-columns:1fr}.fc-actions{justify-content:flex-start}.category-summary{grid-template-columns:repeat(2,1fr)}.kpi-grid{grid-template-columns:repeat(3,1fr)}.cmd-hint{display:none}}
 @media(max-width:640px){.top-nav{height:auto;position:sticky;flex-wrap:wrap;padding:12px;gap:10px}.main-tabs{width:100%;overflow:auto}.nav-actions{width:100%;justify-content:flex-end}.layout{padding:16px}.status-card-grid{grid-template-columns:1fr}.category-summary{grid-template-columns:1fr}.kpi-grid{grid-template-columns:repeat(2,1fr)}.filters{position:relative;top:0;flex-direction:column;align-items:stretch}.cat-list{grid-template-columns:1fr}.completion-num{font-size:46px}}
 @media(prefers-reduced-motion:reduce){*{animation-duration:.001ms!important;transition-duration:.001ms!important}}
-@media print{.category-sidebar,.filters,.note-btn,.status-select,.toast-wrap,.bd-toggle,.cmd-overlay,.cmd-hint,#pdfBtn,.main-tabs,.nav-actions{display:none!important}.top-nav{position:static;height:auto;background:#fff;box-shadow:none;border:0;border-bottom:2px solid #1855A4;padding:10px 0;backdrop-filter:none;-webkit-backdrop-filter:none}.layout{display:block;padding:0}body{background:#fff;zoom:1!important}.view{display:none!important}#dashboardView{display:block!important}.report-section,.status-card,.panel{box-shadow:none;border:1px solid #D7DEE8}.acc-body{max-height:none!important;height:auto!important;overflow:visible!important;opacity:1!important;transform:none!important;display:block!important}.acc,.breakdown-wrap,.section-body,.report-section{break-inside:auto!important}.kpi-cell,.acc-head,.status-card{break-inside:avoid}.status-card.highlight{transform:none}}
+@media print{.category-sidebar,.filters,.note-btn,.status-select,.toast-wrap,.bd-toggle,.cmd-overlay,.cmd-hint,#pdfBtn,#mainPdfBtn,#viewDashDetailsBtn,.main-tabs,.nav-actions{display:none!important}.top-nav{position:static;height:auto;background:#fff;box-shadow:none;border:0;border-bottom:2px solid #1855A4;padding:10px 0;backdrop-filter:none;-webkit-backdrop-filter:none}.layout{display:block;padding:0}body{background:#fff;zoom:1!important}.view{display:none!important}.view.active{display:block!important}.report-section,.status-card,.panel{box-shadow:none;border:1px solid #D7DEE8}.acc-body{max-height:none!important;height:auto!important;overflow:visible!important;opacity:1!important;transform:none!important;display:block!important}.acc,.breakdown-wrap,.section-body,.report-section{break-inside:auto!important}.kpi-cell,.acc-head,.status-card{break-inside:avoid}.status-card.highlight{transform:none}}
 
 /* ===== hierarchical tracker ===== */
 .tl-text{white-space:pre-wrap;word-break:break-word;line-height:1.7;margin-top:6px}
@@ -1432,8 +1432,20 @@ function loadOnline(initial){
       mode='online';
       reindex();
       renderShell();
+      migrateLocalAddedToSheet(f.mainFeatures);
     })
     .catch(()=>{mode='error';renderShell();});
+}
+let _migratingAdded=false;
+function migrateLocalAddedToSheet(sheetMains){
+  if(_migratingAdded||mode!=='online')return;
+  const sheetIds=new Set((sheetMains||[]).map(m=>String(m.featureId)));
+  const local=loadAddedMains().filter(m=>!sheetIds.has(String(m.featureId)));
+  if(!local.length){if(loadAddedMains().length)saveAddedMains([]);return;}
+  _migratingAdded=true;
+  Promise.all(local.map(m=>apiPost({action:'addFeature',main:m}).catch(()=>null)))
+    .then(()=>{saveAddedMains([]);_migratingAdded=false;return loadOnline(false);})
+    .catch(()=>{_migratingAdded=false;});
 }
 function loadOffline(){
   DATA.mains=JSON.parse(JSON.stringify(OFFLINE_MAINS));
@@ -1529,22 +1541,24 @@ function paintDashboard(){const mains=DATA.mains,subs=allSubs(),s=statCounts(sub
     return breakdownHTML(catLabel(cat),`${cmains.length} ${tr('mainFeatures')} · ${c.total} ${tr('subFeatures')}`,CAT_COLORS[cat]||'#64748B',i,pill,kpis,c.comp);
   }).join('');
   animateCounts(document.getElementById('overallSection'));animateCounts(document.getElementById('completionSection'));animateFills(document.getElementById('dashboardView'));}
-function prepDashboardForPrint(){
-  // Force every dashboard breakdown section fully open + natural height so
-  // native iPad/Safari print (share → print) never produces blank pages.
-  document.querySelectorAll('#dashboardView .acc').forEach(a=>{
-    a.classList.add('open');
-    const body=a.querySelector('.acc-body');
-    if(body){body.style.maxHeight='none';body.style.height='auto';}
-    a.querySelectorAll('[data-count]').forEach(e=>e.dataset.done='0');
-    a.querySelectorAll('[data-w]').forEach(e=>{e.dataset.wdone='0';e.style.width=(e.dataset.w||0)+'%';});
-  });
-  animateCounts(document.getElementById('dashboardView'));
+function prepDashboardForPrint(){preparePrint();}
+function freezeCounts(scope){const root=scope||document;
+  root.querySelectorAll('[data-count]').forEach(el=>{el.dataset.done='1';const t=parseFloat(el.dataset.count)||0;el.textContent=el.dataset.dec==='1'?fmtPct(t):Math.round(t);});
+  root.querySelectorAll('[data-w]').forEach(el=>{el.dataset.wdone='1';el.style.width=(el.dataset.w||0)+'%';});}
+function preparePrint(){
+  const active=document.querySelector('.view.active');
+  // The detailed dashboard is lazy — make sure whichever dashboard is being printed is painted first.
+  if(active&&active.id==='dashboardView'){paintDashboard();}
+  else if(active&&active.id==='mainDashboardView'){paintMainDashboard();}
+  // Open every accordion and lock natural height so nothing is clipped.
+  (active||document).querySelectorAll('.acc').forEach(a=>{a.classList.add('open');const b=a.querySelector('.acc-body');if(b){b.style.maxHeight='none';b.style.height='auto';}});
+  // Freeze all animated counters/bars to their FINAL values (no animation during the print snapshot).
+  freezeCounts(active||document);
 }
 // Run before ANY print path (the share/print button calls this too).
-window.addEventListener('beforeprint',prepDashboardForPrint);
-if(window.matchMedia){const mq=window.matchMedia('print');(mq.addEventListener?mq.addEventListener('change',e=>{if(e.matches)prepDashboardForPrint();}):mq.addListener&&mq.addListener(e=>{if(e.matches)prepDashboardForPrint();}));}
-function exportPDF(){toast(tr('preparingPdf'),'pdf');prepDashboardForPrint();setTimeout(()=>window.print(),700);}
+window.addEventListener('beforeprint',preparePrint);
+if(window.matchMedia){const mq=window.matchMedia('print');(mq.addEventListener?mq.addEventListener('change',e=>{if(e.matches)preparePrint();}):mq.addListener&&mq.addListener(e=>{if(e.matches)preparePrint();}));}
+function exportPDF(){toast(tr('preparingPdf'),'pdf');preparePrint();setTimeout(()=>window.print(),300);}
 function renderDashboard(skeleton){if(mode!=='online'&&mode!=='offline')return;
   if(skeleton){document.getElementById('overallStatusCards').innerHTML=skeletonCards(4,'sk-card');document.getElementById('completionFill').style.width='0';
     document.getElementById('phaseBreakdown').innerHTML=skeletonCards(3,'sk-row');document.getElementById('categoryBreakdown').innerHTML=skeletonCards(3,'sk-row');setTimeout(paintDashboard,420);}else paintDashboard();}
@@ -2084,7 +2098,7 @@ function renderMainDashboard(skeleton){if(mode!=='online'&&mode!=='offline')retu
   if(skeleton){const cards=document.getElementById('mainOverallCards');if(cards)cards.innerHTML=skeletonCards(4,'sk-card');
     const host=document.getElementById('mainPhaseBreakdown');if(host)host.innerHTML=skeletonCards(4,'sk-row');setTimeout(paintMainDashboard,300);}
   else paintMainDashboard();}
-function exportMainPDF(){toast(tr('preparingPdf'),'pdf');document.querySelectorAll('#mainDashboardView .acc').forEach(a=>{a.classList.add('open');const b=a.querySelector('.acc-body');if(b){b.style.maxHeight='none';b.style.height='auto';}a.querySelectorAll('[data-count]').forEach(e=>e.dataset.done='0');a.querySelectorAll('[data-w]').forEach(e=>{e.dataset.wdone='0';e.style.width=(e.dataset.w||0)+'%';});});animateCounts(document.getElementById('mainDashboardView'));setTimeout(()=>window.print(),700);}
+function exportMainPDF(){toast(tr('preparingPdf'),'pdf');preparePrint();setTimeout(()=>window.print(),300);}
 
 /* ---------- ADD MAIN FEATURE ---------- */
 const LS_ADDED='ah_added_mains_v1';
@@ -2172,10 +2186,21 @@ function submitAddMain(){
     return{featureId:mid+'-'+String(globalSeq).padStart(3,'0'),displayNo:dno+'.'+sec.no+'-'+String(seqBySection[skey]).padStart(2,'0'),sectionDisplayNo:dno+'.'+sec.no,parentFeatureId:mid,mainFeatureId:mid,sectionId:sec.id,level:'SubFeature',englishName:d.text,arabicName:d.text,category:cat,mainFeature:mainName,subSection:d.ss.en,subSectionAr:d.ss.ar,phase:d.phase,priority:d.priority||firstPriority,status:d.status,calculatedStatus:'',completionRate:'',isCountable:true,isHidden:false,originalStatus:d.status,lastReviewDate:'',lastUpdatedDate:n.date,lastUpdatedTime:n.time};
   });
   const main={featureId:mid,displayNo:dno,parentFeatureId:'',level:'MainFeature',englishName:mainName,arabicName:mainName,category:cat,mainFeature:mainName,subSection:'',phase:'',priority:firstPriority,status:'Not Verified',calculatedStatus:'Not Verified',completionRate:0,isCountable:false,isHidden:false,lastReviewDate:'',lastUpdatedDate:n.date,lastUpdatedTime:n.time,subFeatures};
+
+  if(mode==='online'){
+    showSaveIndicator('saving');
+    apiPost({action:'addFeature',main:main})
+      .then(r=>{if(!r||!r.ok)throw new Error((r&&r.error)||'Add failed');closeAddMain();toast(tr('amAdded'),'check');return loadOnline(false);})
+      .then(()=>showSaveIndicator('saved'))
+      .catch(e=>{console.error(e);showSaveIndicator('failed');toast((lang==='ar'?'تعذّرت إضافة الخاصية إلى Google Sheet':'Failed to add feature to Google Sheet'),'error');});
+    return;
+  }
+
+  // Offline preview: keep locally.
   DATA.mains.push(main);
   const added=loadAddedMains();added.push(main);saveAddedMains(added);
   reindex();recomputeMain(main);
-  if(mode==='offline')persistOffline();
+  persistOffline();
   closeAddMain();
   renderCategories(false);renderMainDashboard(false);
   const active=document.querySelector('.view.active');if(active&&active.id==='dashboardView')renderDashboard(false);
