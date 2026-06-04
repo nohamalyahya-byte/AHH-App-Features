@@ -879,9 +879,39 @@ body:not(.is-admin) .admin-tab{display:none !important;}
 .am-input{width:100%;border:1px solid var(--border);border-radius:12px;padding:11px 12px;font-size:14px;background:#fff;color:var(--text);}
 textarea.am-input{min-height:70px;resize:vertical;line-height:1.6;}
 .am-grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:4px;}
+.am-detail-row{border:1px solid var(--border);border-radius:14px;padding:12px;margin-top:10px;background:#FAFCFF;display:flex;flex-direction:column;gap:8px;position:relative;}
+.am-detail-head{display:flex;align-items:center;justify-content:space-between;}
+.am-detail-no{font-size:11px;font-weight:900;color:var(--primary);background:var(--primary-soft);border:1px solid var(--primary-tint);border-radius:999px;padding:2px 10px;}
+.am-del{width:26px;height:26px;border-radius:8px;border:1px solid var(--border);background:#fff;color:var(--danger);font-size:13px;font-weight:900;display:flex;align-items:center;justify-content:center;}
+.am-del:hover{background:var(--danger-bg);border-color:var(--danger);}
+.am-add-detail{margin-top:12px;width:100%;border:1.5px dashed var(--secondary);background:var(--primary-soft);color:var(--primary);border-radius:12px;padding:11px;font-size:13px;font-weight:800;}
+.am-add-detail:hover{background:var(--primary-tint);}
+.am-sub-label{font-size:11px;font-weight:800;color:var(--muted);}
 .addmain-actions{display:flex;gap:10px;justify-content:flex-end;padding:16px 20px;border-top:1px solid var(--border);position:sticky;bottom:0;background:var(--card);}
 @media(max-width:560px){.am-grid3{grid-template-columns:1fr;}}
 @media print{.admin-tab,.admin-only,#addMainBtn,#exportExcelBtn,#viewDashDetailsBtn{display:none !important;}}
+
+
+/* Arabic font size enhancement */
+body.ar{
+  font-size:18px !important;
+}
+body.ar .fc-main,
+body.ar .fc-sub,
+body.ar .sub-name,
+body.ar .ss-ar,
+body.ar .tl-text,
+body.ar .tl-title,
+body.ar .tl-desc,
+body.ar td,
+body.ar th,
+body.ar .feature-mini .name,
+body.ar .feature-mini .sub,
+body.ar .panel-title,
+body.ar .report-title,
+body.ar .exec-title{
+  font-size:1.12em !important;
+}
 
 </style>
 </head>
@@ -1040,24 +1070,20 @@ textarea.am-input{min-height:70px;resize:vertical;line-height:1.6;}
     </div>
     <div class="addmain-body">
       <label class="am-label" id="amCategoryLabel">Category</label>
-      <select id="amCategory" class="am-input" onchange="amCategoryChanged()"></select>
-      <input id="amNewCategory" class="am-input am-hidden" placeholder="New category name" />
+      <input id="amCategory" class="am-input" list="amCategoryList" autocomplete="off" oninput="amCategoryChanged()" placeholder="" />
+      <datalist id="amCategoryList"></datalist>
 
       <label class="am-label" id="amMainNameLabel">Main Feature name</label>
-      <input id="amMainName" class="am-input" placeholder="Main feature name" />
+      <input id="amMainName" class="am-input" autocomplete="off" placeholder="" />
 
-      <label class="am-label" id="amSubSectionLabel">Sub Section</label>
-      <select id="amSubSection" class="am-input" onchange="amSubSectionChanged()"></select>
-      <input id="amNewSubSection" class="am-input am-hidden" placeholder="New sub section name" />
+      <label class="am-label" id="amDetailsHeadLabel">Details / Sub Features</label>
+      <div id="amDetailsList"></div>
+      <button type="button" class="am-add-detail rippleable" id="amAddDetailBtn" onclick="addDetailRow()"><span id="amAddDetailLabel">+ Add detail</span></button>
 
-      <label class="am-label" id="amDetailsLabel">Details / Sub Feature</label>
-      <textarea id="amDetails" class="am-input" placeholder="Sub feature details"></textarea>
-
-      <div class="am-grid3">
-        <div><label class="am-label" id="amPhaseLabel">Phase</label><select id="amPhase" class="am-input"></select></div>
-        <div><label class="am-label" id="amPriorityLabel">Priority</label><select id="amPriority" class="am-input"></select></div>
-        <div><label class="am-label" id="amStatusLabel">Status</label><select id="amStatus" class="am-input"></select></div>
-      </div>
+      <datalist id="amSubSectionList"></datalist>
+      <datalist id="amPhaseList"></datalist>
+      <datalist id="amPriorityList"></datalist>
+      <datalist id="amStatusList"></datalist>
     </div>
     <div class="addmain-actions">
       <button class="icon-btn rippleable" onclick="closeAddMain()" id="amCancelBtn">Cancel</button>
@@ -1121,6 +1147,7 @@ const STR={
     all:"All Features",totalFeatures:"Sub-Features",mainFeatures:"Main Features",available:"Available",partial:"Partially Available",
     dashDetails:"Dashboard Details",viewDashDetails:"View Dashboard Details",addMainFeature:"Add Main Feature",exportExcel:"Export to Excel",
     addNewCategory:"+ Add New Category",addNewSubSection:"+ Add New Sub Section",amCategory:"Category",amMainName:"Main Feature name",amSubSection:"Sub Section",amDetails:"Details / Sub Feature",amPhase:"Phase",amPriority:"Priority",amStatus:"Status",amSave:"Save",amCancel:"Cancel",amTitle:"Add Main Feature",amNewCatPh:"New category name",amNewSubPh:"New sub section name",amMainPh:"Main feature name",amDetailsPh:"Sub feature details",amAdded:"Main feature added",amNeedName:"Please enter the main feature and details",amNeedCat:"Please choose or enter a category",noneSub:"— None —",exportEmpty:"Nothing to export with the current filters",exported:"Excel file exported",mainCount:"Main Features",
+    amDetailsHead:"Details / Sub Features",amAddDetail:"+ Add detail",amDelDetail:"Remove",amSubFeaturePh:"Sub feature details",amSSPh:"Sub section (type or pick)",amPhasePh:"Phase",amPriorityPh:"Priority",amStatusPh:"Status",amCatPh:"Type or pick a category",amNeedDetail:"Please add at least one detail with text",amDetailWord:"Detail",
     na:"Not Available",nv:"Not Verified",completion:"Completion",features:"main features",subFeatures:"sub-features",
     allPhases:"All Phases",allPriorities:"All Priorities",allStatuses:"All Statuses",featureNotes:"Notes",phase:"Phase",priority:"Priority",status:"Status",
     search:"Search features...",notePlaceholder:"Write a note...",noNotes:"No notes yet.",
@@ -1140,6 +1167,7 @@ const STR={
     all:"جميع الخصائص",totalFeatures:"الخصائص الفرعية",mainFeatures:"الخصائص الرئيسية",available:"متوفر",partial:"متوفر جزئياً",
     dashDetails:"لوحة التحكم - التفاصيل",viewDashDetails:"عرض لوحة التحكم - التفاصيل",addMainFeature:"إضافة خاصية رئيسية",exportExcel:"تصدير إلى Excel",
     addNewCategory:"+ إضافة تصنيف جديد",addNewSubSection:"+ إضافة قسم فرعي جديد",amCategory:"التصنيف",amMainName:"اسم الخاصية الرئيسية",amSubSection:"القسم الفرعي",amDetails:"التفاصيل / الخاصية الفرعية",amPhase:"المرحلة",amPriority:"الأولوية",amStatus:"الحالة",amSave:"حفظ",amCancel:"إلغاء",amTitle:"إضافة خاصية رئيسية",amNewCatPh:"اسم التصنيف الجديد",amNewSubPh:"اسم القسم الفرعي الجديد",amMainPh:"اسم الخاصية الرئيسية",amDetailsPh:"تفاصيل الخاصية الفرعية",amAdded:"تمت إضافة الخاصية الرئيسية",amNeedName:"يرجى إدخال اسم الخاصية الرئيسية والتفاصيل",amNeedCat:"يرجى اختيار أو إدخال تصنيف",noneSub:"— بدون —",exportEmpty:"لا توجد بيانات للتصدير حسب الفلاتر الحالية",exported:"تم تصدير ملف Excel",mainCount:"الخصائص الرئيسية",
+    amDetailsHead:"التفاصيل / الخصائص الفرعية",amAddDetail:"+ إضافة تفصيل",amDelDetail:"حذف",amSubFeaturePh:"تفاصيل الخاصية الفرعية",amSSPh:"القسم الفرعي (اكتب أو اختر)",amPhasePh:"المرحلة",amPriorityPh:"الأولوية",amStatusPh:"الحالة",amCatPh:"اكتب أو اختر تصنيفاً",amNeedDetail:"يرجى إضافة تفصيل واحد على الأقل مع نص",amDetailWord:"تفصيل",
     na:"غير متوفر",nv:"غير متحقق",completion:"الاكتمال",features:"خاصية رئيسية",subFeatures:"خاصية فرعية",
     allPhases:"كل المراحل",allPriorities:"كل الأولويات",allStatuses:"كل الحالات",featureNotes:"الملاحظات",phase:"المرحلة",priority:"الأولوية",status:"الحالة",
     search:"بحث في الخصائص...",notePlaceholder:"اكتب ملاحظة...",noNotes:"لا توجد ملاحظات بعد.",
@@ -1887,64 +1915,86 @@ function loadAddedMains(){try{return JSON.parse(localStorage.getItem(LS_ADDED)||
 function saveAddedMains(arr){try{localStorage.setItem(LS_ADDED,JSON.stringify(arr));}catch(e){}}
 function mergeAddedMains(){const added=loadAddedMains();added.forEach(m=>{if(!DATA.mains.some(x=>x.featureId===m.featureId)){const cm=JSON.parse(JSON.stringify(m));cm.subFeatures=(cm.subFeatures||[]).map(x=>({...x,isCountable:!isFalseValue(x.isCountable),isHidden:String(x.isHidden).toLowerCase()==='true'||String(x.isHidden)==='1'||x.status==='Not Used'}));recomputeMain(cm);DATA.mains.push(cm);}});}
 function genMainId(){let i=1;while(DATA.mains.some(m=>m.featureId==='UM'+i))i++;return 'UM'+i;}
+let amSubsecOptions=[];
 function openAddMain(){
   if(!requireAdmin())return;
   document.getElementById('amCategoryLabel').textContent=tr('amCategory');
   document.getElementById('amMainNameLabel').textContent=tr('amMainName');
-  document.getElementById('amSubSectionLabel').textContent=tr('amSubSection');
-  document.getElementById('amDetailsLabel').textContent=tr('amDetails');
-  document.getElementById('amPhaseLabel').textContent=tr('amPhase');
-  document.getElementById('amPriorityLabel').textContent=tr('amPriority');
-  document.getElementById('amStatusLabel').textContent=tr('amStatus');
+  document.getElementById('amDetailsHeadLabel').textContent=tr('amDetailsHead');
   document.getElementById('addMainTitle').textContent=tr('amTitle');
   document.getElementById('amSaveLabel').textContent=tr('amSave');
   document.getElementById('amCancelBtn').textContent=tr('amCancel');
-  document.getElementById('amNewCategory').placeholder=tr('amNewCatPh');
-  document.getElementById('amNewSubSection').placeholder=tr('amNewSubPh');
+  document.getElementById('amAddDetailLabel').textContent=tr('amAddDetail');
+  document.getElementById('amCategory').placeholder=tr('amCatPh');
   document.getElementById('amMainName').placeholder=tr('amMainPh');
-  document.getElementById('amDetails').placeholder=tr('amDetailsPh');
-  // Category options
-  const cats=catNames();
-  document.getElementById('amCategory').innerHTML=cats.map(c=>`<option value="${escapeAttr(c)}">${escapeHtml(catLabel(c))}</option>`).join('')+`<option value="__new__">${tr('addNewCategory')}</option>`;
-  document.getElementById('amNewCategory').classList.add('am-hidden');
-  document.getElementById('amNewCategory').value='';
-  document.getElementById('amMainName').value='';
-  document.getElementById('amDetails').value='';
-  // Phase / Priority / Status options
-  document.getElementById('amPhase').innerHTML=PHASES.map(p=>`<option value="${p}">${phaseLabel(p)}</option>`).join('');
+  // Searchable datalists
+  document.getElementById('amCategoryList').innerHTML=catNames().map(c=>`<option value="${escapeAttr(catLabel(c))}"></option>`).join('');
+  document.getElementById('amPhaseList').innerHTML=PHASES.map(p=>`<option value="${escapeAttr(phaseLabel(p))}"></option>`).join('');
   const pris=[...new Set(allSubs().map(s=>s.priority).filter(Boolean))].sort();
-  document.getElementById('amPriority').innerHTML=pris.map(p=>`<option value="${escapeAttr(p)}">${escapeHtml(p)}</option>`).join('');
-  document.getElementById('amStatus').innerHTML=CANON.map(s=>`<option value="${s}">${statusText(s)}</option>`).join('');
+  document.getElementById('amPriorityList').innerHTML=pris.map(p=>`<option value="${escapeAttr(p)}"></option>`).join('');
+  document.getElementById('amStatusList').innerHTML=CANON.map(s=>`<option value="${escapeAttr(statusText(s))}"></option>`).join('');
+  document.getElementById('amCategory').value='';
+  document.getElementById('amMainName').value='';
   buildAmSubSections();
+  document.getElementById('amDetailsList').innerHTML='';
+  addDetailRow();
   document.getElementById('addMainOverlay').classList.add('open');
 }
 function closeAddMain(){document.getElementById('addMainOverlay').classList.remove('open');}
 function addMainOutside(e){if(e.target.id==='addMainOverlay')closeAddMain();}
-function amCategoryChanged(){const v=document.getElementById('amCategory').value;document.getElementById('amNewCategory').classList.toggle('am-hidden',v!=='__new__');buildAmSubSections();}
+function resolveCategory(typed){const t=(typed||'').trim();if(!t)return'';const hit=catNames().find(c=>c===t||catLabel(c)===t);return hit||t;}
+function amCategoryChanged(){buildAmSubSections();}
 function buildAmSubSections(){
-  const cat=document.getElementById('amCategory').value;
-  let subsecs=[];
-  if(cat&&cat!=='__new__'){const seen={};mainsIn(cat).forEach(m=>(m.subFeatures||[]).forEach(s=>{const en=s.subSection||'',ar=s.subSectionAr||'';if(en&&!seen[en]){seen[en]=true;subsecs.push({en,ar});}}));}
-  const sel=document.getElementById('amSubSection');
-  sel.innerHTML=`<option value="__none__">${tr('noneSub')}</option>`+subsecs.map((s,i)=>`<option value="${i}" data-en="${escapeAttr(s.en)}" data-ar="${escapeAttr(s.ar)}">${escapeHtml(lang==='ar'?(s.ar||s.en):s.en)}</option>`).join('')+`<option value="__new__">${tr('addNewSubSection')}</option>`;
-  amSubSectionChanged();
+  const cat=resolveCategory(document.getElementById('amCategory').value);
+  const seen={};amSubsecOptions=[];
+  const pool=(cat&&catNames().includes(cat))?mainsIn(cat):DATA.mains;
+  pool.forEach(m=>(m.subFeatures||[]).forEach(s=>{const en=s.subSection||'',ar=s.subSectionAr||'';const label=lang==='ar'?(ar||en):en;if(label&&!seen[label]){seen[label]=true;amSubsecOptions.push({en:en||label,ar:ar||label,label});}}));
+  document.getElementById('amSubSectionList').innerHTML=amSubsecOptions.map(s=>`<option value="${escapeAttr(s.label)}"></option>`).join('');
 }
-function amSubSectionChanged(){const v=document.getElementById('amSubSection').value;document.getElementById('amNewSubSection').classList.toggle('am-hidden',v!=='__new__');}
+function resolveSubsec(typed){const t=(typed||'').trim();if(!t)return{en:'',ar:''};const hit=amSubsecOptions.find(s=>s.label===t||s.en===t||s.ar===t);return hit?{en:hit.en,ar:hit.ar}:{en:t,ar:t};}
+function resolvePhase(typed){const t=(typed||'').trim();if(!t)return'';return PHASES.find(p=>p===t||phaseLabel(p)===t)||t;}
+function resolveStatus(typed){const t=(typed||'').trim();return CANON.find(s=>s===t||statusText(s)===t)||'Not Verified';}
+function detailRowHTML(){
+  return `<div class="am-detail-row">
+    <div class="am-detail-head"><span class="am-detail-no"></span><button type="button" class="am-del rippleable" onclick="removeDetailRow(this)" title="${escapeAttr(tr('amDelDetail'))}">✕</button></div>
+    <textarea class="am-input am-d-sub" placeholder="${escapeAttr(tr('amSubFeaturePh'))}"></textarea>
+    <input class="am-input am-d-ss" list="amSubSectionList" autocomplete="off" placeholder="${escapeAttr(tr('amSSPh'))}" />
+    <div class="am-grid3">
+      <input class="am-input am-d-phase" list="amPhaseList" autocomplete="off" placeholder="${escapeAttr(tr('amPhasePh'))}" />
+      <input class="am-input am-d-priority" list="amPriorityList" autocomplete="off" placeholder="${escapeAttr(tr('amPriorityPh'))}" />
+      <input class="am-input am-d-status" list="amStatusList" autocomplete="off" placeholder="${escapeAttr(tr('amStatusPh'))}" />
+    </div>
+  </div>`;
+}
+function renumberDetails(){document.querySelectorAll('#amDetailsList .am-detail-row').forEach((r,i)=>{const n=r.querySelector('.am-detail-no');if(n)n.textContent=`${tr('amDetailWord')} ${i+1}`;});}
+function addDetailRow(){const list=document.getElementById('amDetailsList');list.insertAdjacentHTML('beforeend',detailRowHTML());renumberDetails();}
+function removeDetailRow(btn){const row=btn.closest('.am-detail-row');if(row)row.remove();if(!document.querySelector('#amDetailsList .am-detail-row'))addDetailRow();renumberDetails();}
 function submitAddMain(){
   if(!requireAdmin())return;
-  let cat=document.getElementById('amCategory').value;
-  if(cat==='__new__')cat=document.getElementById('amNewCategory').value.trim();
+  const cat=resolveCategory(document.getElementById('amCategory').value);
   if(!cat){toast(tr('amNeedCat'),'error');return;}
   const mainName=document.getElementById('amMainName').value.trim();
-  const details=document.getElementById('amDetails').value.trim();
-  if(!mainName||!details){toast(tr('amNeedName'),'error');return;}
-  const ssSel=document.getElementById('amSubSection'),ssVal=ssSel.value;let ssEn='',ssAr='';
-  if(ssVal==='__new__'){ssEn=document.getElementById('amNewSubSection').value.trim();ssAr=ssEn;}
-  else if(ssVal!=='__none__'){const opt=ssSel.options[ssSel.selectedIndex];ssEn=opt.getAttribute('data-en')||'';ssAr=opt.getAttribute('data-ar')||ssEn;}
-  const phase=document.getElementById('amPhase').value,priority=document.getElementById('amPriority').value,status=document.getElementById('amStatus').value;
-  const mid=genMainId(),sid=mid+'-001';const n=today();const dno=String(DATA.mains.length+1);
-  const main={featureId:mid,displayNo:dno,parentFeatureId:'',level:'MainFeature',englishName:mainName,arabicName:mainName,category:cat,mainFeature:mainName,subSection:'',phase:'',priority:priority,status:status,calculatedStatus:status,completionRate:0,isCountable:false,isHidden:false,lastReviewDate:'',lastUpdatedDate:n.date,lastUpdatedTime:n.time,
-    subFeatures:[{featureId:sid,displayNo:dno+'.1-01',sectionDisplayNo:dno+'.1',parentFeatureId:mid,mainFeatureId:mid,sectionId:mid+'.S1',level:'SubFeature',englishName:details,arabicName:details,category:cat,mainFeature:mainName,subSection:ssEn,subSectionAr:ssAr,phase:phase,priority:priority,status:status,calculatedStatus:'',completionRate:'',isCountable:true,isHidden:false,originalStatus:status,lastReviewDate:'',lastUpdatedDate:n.date,lastUpdatedTime:n.time}]};
+  if(!mainName){toast(tr('amNeedName'),'error');return;}
+  // Collect non-empty detail rows
+  const rows=[...document.querySelectorAll('#amDetailsList .am-detail-row')].map(r=>({
+    text:(r.querySelector('.am-d-sub').value||'').trim(),
+    ss:resolveSubsec(r.querySelector('.am-d-ss').value),
+    phase:resolvePhase(r.querySelector('.am-d-phase').value),
+    priority:(r.querySelector('.am-d-priority').value||'').trim(),
+    status:resolveStatus(r.querySelector('.am-d-status').value)
+  })).filter(d=>d.text);
+  if(!rows.length){toast(tr('amNeedDetail'),'error');return;}
+  const mid=genMainId(),n=today(),dno=String(DATA.mains.length+1);
+  const firstPriority=rows[0].priority||'Priority 1';
+  // Group sub-features by sub-section to assign section numbers/ids
+  const sectionMap={};let sectionSeq=0;const seqBySection={};let globalSeq=0;
+  const subFeatures=rows.map(d=>{
+    const skey=(d.ss.en||'')+'||'+(d.ss.ar||'');
+    if(!sectionMap[skey]){sectionSeq++;sectionMap[skey]={no:sectionSeq,id:mid+'.S'+sectionSeq};seqBySection[skey]=0;}
+    const sec=sectionMap[skey];seqBySection[skey]++;globalSeq++;
+    return{featureId:mid+'-'+String(globalSeq).padStart(3,'0'),displayNo:dno+'.'+sec.no+'-'+String(seqBySection[skey]).padStart(2,'0'),sectionDisplayNo:dno+'.'+sec.no,parentFeatureId:mid,mainFeatureId:mid,sectionId:sec.id,level:'SubFeature',englishName:d.text,arabicName:d.text,category:cat,mainFeature:mainName,subSection:d.ss.en,subSectionAr:d.ss.ar,phase:d.phase,priority:d.priority||firstPriority,status:d.status,calculatedStatus:'',completionRate:'',isCountable:true,isHidden:false,originalStatus:d.status,lastReviewDate:'',lastUpdatedDate:n.date,lastUpdatedTime:n.time};
+  });
+  const main={featureId:mid,displayNo:dno,parentFeatureId:'',level:'MainFeature',englishName:mainName,arabicName:mainName,category:cat,mainFeature:mainName,subSection:'',phase:'',priority:firstPriority,status:'Not Verified',calculatedStatus:'Not Verified',completionRate:0,isCountable:false,isHidden:false,lastReviewDate:'',lastUpdatedDate:n.date,lastUpdatedTime:n.time,subFeatures};
   DATA.mains.push(main);
   const added=loadAddedMains();added.push(main);saveAddedMains(added);
   reindex();recomputeMain(main);
