@@ -892,25 +892,68 @@ textarea.am-input{min-height:70px;resize:vertical;line-height:1.6;}
 @media print{.admin-tab,.admin-only,#addMainBtn,#exportExcelBtn,#viewDashDetailsBtn{display:none !important;}}
 
 
-/* Arabic font size enhancement */
-body.ar{
-  font-size:18px !important;
+/* ===== Soft Delete Controls (Admin only) ===== */
+.delete-btn{
+  height:34px;
+  min-width:34px;
+  border:1px solid #FECACA;
+  background:#FEF2F2;
+  color:#DC2626;
+  border-radius:10px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:5px;
+  font-size:11px;
+  font-weight:900;
+  transition:all var(--t-fast) var(--ease);
 }
-body.ar .fc-main,
-body.ar .fc-sub,
-body.ar .sub-name,
-body.ar .ss-ar,
-body.ar .tl-text,
-body.ar .tl-title,
-body.ar .tl-desc,
-body.ar td,
-body.ar th,
-body.ar .feature-mini .name,
-body.ar .feature-mini .sub,
-body.ar .panel-title,
-body.ar .report-title,
-body.ar .exec-title{
-  font-size:1.12em !important;
+.delete-btn:hover{
+  background:#FEE2E2;
+  color:#DC2626;
+  border-color:#FECACA;
+  transform:translateY(-1px);
+  box-shadow:0 6px 14px rgba(220,38,38,.14);
+}
+.delete-btn:active{transform:translateY(0) scale(.97)}
+.delete-category-btn{color:#DC2626;border-color:#FECACA;background:#FEF2F2}
+.delete-category-btn:hover{background:#FEE2E2;color:#DC2626;border-color:#FECACA}
+/* Hidden Features page */
+.hidden-intro{font-size:13px;color:var(--muted);line-height:1.7;margin:2px 0 14px;padding:10px 14px;background:var(--primary-soft);border:1px solid var(--primary-tint);border-radius:12px;}
+.hidden-group-title{font-size:12px;font-weight:900;color:var(--primary-dark);margin:18px 0 8px;letter-spacing:.02em;}
+.hidden-card{display:flex;align-items:center;justify-content:space-between;gap:12px;border:1px solid var(--border);border-radius:14px;padding:12px 14px;margin-bottom:8px;background:var(--card);transition:all var(--t-fast) var(--ease);}
+.hidden-card:hover{border-color:var(--secondary);box-shadow:var(--shadow-sm);}
+.hidden-info{min-width:0;flex:1;}
+.hidden-badge{display:inline-block;font-size:10px;font-weight:900;color:#64748B;background:#F1F5F9;border:1px solid #E2E8F0;border-radius:999px;padding:2px 9px;margin-bottom:5px;}
+.hidden-name{font-size:14px;font-weight:800;color:var(--text);line-height:1.5;word-break:break-word;}
+.hidden-meta{font-size:11.5px;color:var(--muted);margin-top:3px;line-height:1.5;word-break:break-word;}
+.restore-btn{flex-shrink:0;display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 14px;border:1px solid #BBF7D0;background:#F0FDF4;color:#16A34A;border-radius:10px;font-size:12px;font-weight:900;transition:all var(--t-fast) var(--ease);}
+.restore-btn:hover{background:#16A34A;color:#fff;border-color:#16A34A;transform:translateY(-1px);box-shadow:0 8px 18px rgba(22,163,74,.18);}
+.restore-btn:active{transform:translateY(0) scale(.97);}
+.sub-note-cell{gap:7px}
+.sub-note-cell .delete-btn{width:34px;height:34px;min-width:34px;padding:0}
+.section-delete-btn{
+  margin-inline-start:8px;
+  width:32px;
+  height:30px;
+  min-width:32px;
+}
+.exec-delete-btn{
+  width:34px;
+  height:34px;
+  min-width:34px;
+}
+body:not(.is-admin) .delete-btn,
+body:not(.is-admin) .delete-category-btn{
+  display:none!important;
+}
+body:not(.ar) .sub-table-head,
+body:not(.ar) .sub-row{
+  grid-template-columns:68px minmax(0,1fr) 96px 84px 128px 92px !important;
+}
+body.ar .sub-table-head,
+body.ar .sub-row{
+  grid-template-columns:68px minmax(170px,1fr) 104px 92px 146px 96px !important;
 }
 
 </style>
@@ -928,6 +971,7 @@ body.ar .exec-title{
     <button class="tab-btn rippleable" data-view="trackerView" data-ic="tracker" onclick="switchView('trackerView',this)"><span data-i18n="tracker">Feature Tracker</span></button>
     <button class="tab-btn rippleable admin-tab" id="dashDetailsTab" data-view="dashboardView" data-ic="gauge" onclick="switchView('dashboardView',this)"><span data-i18n="dashDetails">Dashboard Details</span></button>
     <button class="tab-btn rippleable admin-tab" data-view="activityView" data-ic="activity" onclick="switchView('activityView',this)"><span data-i18n="activity">Activity Log</span></button>
+    <button class="tab-btn rippleable admin-tab" data-view="hiddenView" data-ic="x" onclick="switchView('hiddenView',this)"><span data-i18n="hiddenFeatures">Hidden Features</span></button>
   </nav>
   <div class="nav-actions">
     <button class="guide-btn rippleable" onclick="document.getElementById('guideModal').classList.add('open')" aria-label="Guide" title="الدليل التوضيحي / Guide"><span data-ic="lightbulb"></span></button>
@@ -1016,6 +1060,7 @@ body.ar .exec-title{
         <div class="filter-actions">
           <div class="save-indicator" id="saveIndicator"><span class="dot"></span><span id="saveIndicatorText"></span></div>
           <button class="filter-btn rippleable admin-only" id="addMainBtn" onclick="openAddMain()" data-ic="check"><span data-i18n="addMainFeature">Add Main Feature</span></button>
+          <button class="filter-btn rippleable admin-only delete-category-btn" id="deleteCategoryBtn" onclick="softDeleteCurrentCategory()" data-ic="x"><span id="deleteCategoryText">حذف التصنيف</span></button>
           <button class="filter-btn rippleable" id="exportExcelBtn" onclick="exportExcel()" data-ic="download"><span data-i18n="exportExcel">Export to Excel</span></button>
           <button class="filter-btn rippleable" id="collapseAllBtn" onclick="collapseAll()" data-ic="layers"><span data-i18n="collapseAll">Collapse All</span></button>
           <button class="filter-btn clear rippleable" id="clearFiltersBtn" onclick="clearFilters()" data-ic="x"><span data-i18n="clearFilters">Clear Filters</span></button>
@@ -1031,6 +1076,14 @@ body.ar .exec-title{
           <div class="act-filter"><input type="date" id="activityDate" onchange="renderActivity()" /><button class="icon-btn rippleable" onclick="clearActivityDate()" data-ic="x"><span data-i18n="clear">Clear</span></button></div>
         </div>
         <div id="activityList"></div>
+      </div>
+    </section>
+
+    <section class="view" id="hiddenView">
+      <div class="panel">
+        <div class="panel-head"><span class="section-ic" data-ic="x"></span><div class="panel-title" data-i18n="hiddenFeatures">Hidden Features</div></div>
+        <div class="hidden-intro" id="hiddenIntro"></div>
+        <div id="hiddenList"></div>
       </div>
     </section>
   </section>
@@ -1148,6 +1201,7 @@ const STR={
     dashDetails:"Dashboard Details",viewDashDetails:"View Dashboard Details",addMainFeature:"Add Main Feature",exportExcel:"Export to Excel",
     addNewCategory:"+ Add New Category",addNewSubSection:"+ Add New Sub Section",amCategory:"Category",amMainName:"Main Feature name",amSubSection:"Sub Section",amDetails:"Details / Sub Feature",amPhase:"Phase",amPriority:"Priority",amStatus:"Status",amSave:"Save",amCancel:"Cancel",amTitle:"Add Main Feature",amNewCatPh:"New category name",amNewSubPh:"New sub section name",amMainPh:"Main feature name",amDetailsPh:"Sub feature details",amAdded:"Main feature added",amNeedName:"Please enter the main feature and details",amNeedCat:"Please choose or enter a category",noneSub:"— None —",exportEmpty:"Nothing to export with the current filters",exported:"Excel file exported",mainCount:"Main Features",
     amDetailsHead:"Details / Sub Features",amAddDetail:"+ Add detail",amDelDetail:"Remove",amSubFeaturePh:"Sub feature details",amSSPh:"Sub section (type or pick)",amPhasePh:"Phase",amPriorityPh:"Priority",amStatusPh:"Status",amCatPh:"Type or pick a category",amNeedDetail:"Please add at least one detail with text",amDetailWord:"Detail",
+    hiddenFeatures:"Hidden Features",restore:"Restore",noHidden:"No hidden items. Everything is visible in the portal.",hiddenIntro:"These items are hidden from the portal but remain stored in Google Sheet. Restore to bring them back.",hCategories:"Hidden Categories",hMains:"Hidden Main Features",hSubs:"Hidden Sub Features",catBadge:"Category",mainBadge:"Main Feature",subBadge:"Sub Feature",
     na:"Not Available",nv:"Not Verified",completion:"Completion",features:"main features",subFeatures:"sub-features",
     allPhases:"All Phases",allPriorities:"All Priorities",allStatuses:"All Statuses",featureNotes:"Notes",phase:"Phase",priority:"Priority",status:"Status",
     search:"Search features...",notePlaceholder:"Write a note...",noNotes:"No notes yet.",
@@ -1168,6 +1222,7 @@ const STR={
     dashDetails:"لوحة التحكم - التفاصيل",viewDashDetails:"عرض لوحة التحكم - التفاصيل",addMainFeature:"إضافة خاصية رئيسية",exportExcel:"تصدير إلى Excel",
     addNewCategory:"+ إضافة تصنيف جديد",addNewSubSection:"+ إضافة قسم فرعي جديد",amCategory:"التصنيف",amMainName:"اسم الخاصية الرئيسية",amSubSection:"القسم الفرعي",amDetails:"التفاصيل / الخاصية الفرعية",amPhase:"المرحلة",amPriority:"الأولوية",amStatus:"الحالة",amSave:"حفظ",amCancel:"إلغاء",amTitle:"إضافة خاصية رئيسية",amNewCatPh:"اسم التصنيف الجديد",amNewSubPh:"اسم القسم الفرعي الجديد",amMainPh:"اسم الخاصية الرئيسية",amDetailsPh:"تفاصيل الخاصية الفرعية",amAdded:"تمت إضافة الخاصية الرئيسية",amNeedName:"يرجى إدخال اسم الخاصية الرئيسية والتفاصيل",amNeedCat:"يرجى اختيار أو إدخال تصنيف",noneSub:"— بدون —",exportEmpty:"لا توجد بيانات للتصدير حسب الفلاتر الحالية",exported:"تم تصدير ملف Excel",mainCount:"الخصائص الرئيسية",
     amDetailsHead:"التفاصيل / الخصائص الفرعية",amAddDetail:"+ إضافة تفصيل",amDelDetail:"حذف",amSubFeaturePh:"تفاصيل الخاصية الفرعية",amSSPh:"القسم الفرعي (اكتب أو اختر)",amPhasePh:"المرحلة",amPriorityPh:"الأولوية",amStatusPh:"الحالة",amCatPh:"اكتب أو اختر تصنيفاً",amNeedDetail:"يرجى إضافة تفصيل واحد على الأقل مع نص",amDetailWord:"تفصيل",
+    hiddenFeatures:"العناصر المخفية",restore:"استعادة",noHidden:"لا توجد عناصر مخفية. كل العناصر ظاهرة في البوابة.",hiddenIntro:"هذه العناصر مخفية من البوابة لكنها لا تزال محفوظة في Google Sheet. اضغطي استعادة لإعادتها.",hCategories:"تصنيفات مخفية",hMains:"خصائص رئيسية مخفية",hSubs:"خصائص فرعية مخفية",catBadge:"تصنيف",mainBadge:"خاصية رئيسية",subBadge:"خاصية فرعية",
     na:"غير متوفر",nv:"غير متحقق",completion:"الاكتمال",features:"خاصية رئيسية",subFeatures:"خاصية فرعية",
     allPhases:"كل المراحل",allPriorities:"كل الأولويات",allStatuses:"كل الحالات",featureNotes:"الملاحظات",phase:"المرحلة",priority:"الأولوية",status:"الحالة",
     search:"بحث في الخصائص...",notePlaceholder:"اكتب ملاحظة...",noNotes:"لا توجد ملاحظات بعد.",
@@ -1200,10 +1255,10 @@ function updateAccessUI(){
   const ro=document.getElementById('noteReadonlyMessage');if(ro){ro.textContent=t.roNote;ro.style.display=isAdminMode?'none':'block';}
 
   // Edit-only views (Dashboard Details + Activity Log) are gated by the .admin-tab CSS.
-  document.body.classList.toggle('is-admin',isAdminMode);
+  document.body.classList.toggle('is-admin',isAdminMode);updateDeleteCategoryButton();
   if(!isAdminMode){
     const activeView=document.querySelector('.view.active');
-    if(activeView && (activeView.id==='activityView'||activeView.id==='dashboardView')){
+    if(activeView && (activeView.id==='activityView'||activeView.id==='dashboardView'||activeView.id==='hiddenView')){
       const mainBtn=document.querySelector('.tab-btn[data-view="mainDashboardView"]');
       const mainView=document.getElementById('mainDashboardView');
       document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
@@ -1253,8 +1308,9 @@ function priorityClass(p){const n=String(p||'').match(/\d+/);return n?'priority-
 function statusText(s){return s?(lang==='ar'?(STATUS[s]?.ar||s):s):'—';}
 function statusMeta(s){return STATUS[s]||{color:'#64748B',bg:'#F1F5F9',border:'#E2E8F0',ar:s||'—'};}
 function nameOf(o){return (lang==='ar'?(o.arabicName||o.englishName):(o.englishName||o.arabicName))||'';}
-function catNames(){return[...new Set(DATA.mains.map(m=>m.category))];}
-function mainsIn(cat){return cat==='All Features'?DATA.mains:DATA.mains.filter(m=>m.category===cat);}
+function mainVisible(m){return !isHiddenItem(m) && String(m.status||'')!=='Not Used' && displaySubsOf(m).length>0;}
+function catNames(){return[...new Set(DATA.mains.filter(mainVisible).map(m=>m.category))];}
+function mainsIn(cat){const list=DATA.mains.filter(mainVisible);return cat==='All Features'?list:list.filter(m=>m.category===cat);}
 /* A row counts as a Sub-Feature ONLY if its Level is Sub/SubFeature (or Level
    is blank but it has a Parent_Feature_ID). Main Features and every kind of
    header row (Section / Category / Phase / Group) are excluded from the count. */
@@ -1267,7 +1323,7 @@ function isCountableItem(f){return isSubFeatureLevel(f) && !isFalseValue(f.isCou
 function isHiddenItem(f){return String(f.isHidden).toLowerCase()==='true'||String(f.isHidden)==='1'||f.status==='Not Used';}
 function isSubFeature(f){return isCountableItem(f) && !isHiddenItem(f) && CANON.includes(f.status);}
 function subsOf(m){return (m.subFeatures||[]).filter(isSubFeature);}
-function displaySubsOf(m){return (m.subFeatures||[]).filter(isSubFeatureLevel);}
+function displaySubsOf(m){return (m.subFeatures||[]).filter(s=>isSubFeatureLevel(s) && !isHiddenItem(s));}
 function allSubs(){return DATA.mains.flatMap(subsOf);}
 function pct(c,t){return t?Math.round((c/t)*10000)/100:0;}
 function fmtPct(v){return (Math.round(v*100)/100).toString();}
@@ -1518,12 +1574,14 @@ function subRow(s,index){const st=statusMeta(s.status),nc=notesFor(s.featureId).
     <div class="sub-phase"><span class="mini-badge phase-badge ${phaseClass(s.phase)}">${svg('layers')}${phaseLabel(s.phase)}</span></div>
     <div class="sub-priority"><span class="mini-badge priority-badge ${priorityClass(s.priority)}">${svg('tag')}${escapeHtml(s.priority||'—')}</span></div>
     <div class="sub-status-cell"><select class="status-select rippleable" ${!isAdminMode?'disabled':''} onchange="updateSubStatus('${escapeAttr(s.featureId)}',this.value)" style="--status-bg:${st.bg};--status-color:${st.color};--status-border:${st.border}">${statusOptions(s.status)}</select></div>
-    <div class="sub-note-cell"><button class="note-btn rippleable${nc?' has-notes':''}" title="${tr('featureNotes')}" aria-label="${tr('featureNotes')}" onclick="openNotes('${escapeAttr(s.featureId)}')">${svg('note','icon-sm')}${nc?`<span class="note-count">${nc}</span>`:''}</button></div>
+    <div class="sub-note-cell"><button class="note-btn rippleable${nc?' has-notes':''}" title="${tr('featureNotes')}" aria-label="${tr('featureNotes')}" onclick="openNotes('${escapeAttr(s.featureId)}')">${svg('note','icon-sm')}${nc?`<span class="note-count">${nc}</span>`:''}</button><button class="delete-btn rippleable" title="${lang==='ar'?'حذف الخاصية الفرعية':'Delete Sub Feature'}" onclick="softDeleteItem('SubFeature','${escapeAttr(s.featureId)}');event.stopPropagation();">${svg('x','icon-sm')}</button></div>
   </div>`;}
 function groupedSubSections(list){const groups=[];const map={};list.forEach(s=>{const key=s.sectionId||s.subSection||'__none';if(!map[key]){map[key]={id:key,en:s.subSection||'',ar:s.subSectionAr||'',items:[]};groups.push(map[key]);}map[key].items.push(s);});return groups;}
 function sectionBlock(g){const title=lang==='ar'?(g.ar||g.en):(g.en||g.ar),no=(g.items&&g.items[0]&&(g.items[0].sectionDisplayNo||''))||'';
-  const head=`<div class="sub-table-head"><span>${lang==='ar'?'الرقم':'No.'}</span><span>${lang==='ar'?'الخاصية الفرعية':'Sub Feature'}</span><span>${tr('phase')}</span><span>${tr('priority')}</span><span>${tr('status')}</span><span>${tr('featureNotes')}</span></div>`;
-  return `<div class="sub-section"><span class="ss-line"></span><div><div class="ss-en">${no?'<span class="section-no">'+escapeHtml(no)+'</span>':''}${escapeHtml(title||'—')}</div></div></div><div class="sub-list">${head}${g.items.map((item,index)=>subRow(item,index)).join('')}</div>`;}
+  const canDelete=g.id&&g.id!=='__none';
+  const del=canDelete?`<button class="delete-btn section-delete-btn rippleable" title="${lang==='ar'?'حذف القسم الفرعي':'Delete Sub Section'}" onclick="softDeleteItem('SubSection','${escapeAttr(g.id)}');event.stopPropagation();">${svg('x','icon-sm')}</button>`:'';
+  const head=`<div class="sub-table-head"><span>${lang==='ar'?'الرقم':'No.'}</span><span>${lang==='ar'?'الخاصية الفرعية':'Sub Feature'}</span><span>${tr('phase')}</span><span>${tr('priority')}</span><span>${tr('status')}</span><span>${lang==='ar'?'الإجراءات':'Actions'}</span></div>`;
+  return `<div class="sub-section"><span class="ss-line"></span><div><div class="ss-en">${no?'<span class="section-no">'+escapeHtml(no)+'</span>':''}${escapeHtml(title||'—')}${del}</div></div></div><div class="sub-list">${head}${g.items.map((item,index)=>subRow(item,index)).join('')}</div>`;}
 function execCard(m,idx){const pst=mainStatus(m),st=statusMeta(pst),comp=mainComp(m),countSubs=subsOf(m),displaySubs=displaySubsOf(m),open=openMainId===m.featureId;
   return `<div class="exec-card ${open?'open':''}" id="main-${cssId(m.featureId)}" style="--bar:${st.color};animation-delay:${Math.min(idx,14)*40}ms">
     <button class="exec-head rippleable" onclick="toggleMain('${escapeAttr(m.featureId)}')">
@@ -1534,6 +1592,7 @@ function execCard(m,idx){const pst=mainStatus(m),st=statusMeta(pst),comp=mainCom
       <div class="exec-right">
         <span class="status-chip" style="background:${st.bg};color:${st.color}">${statusText(pst)}</span>
         <div class="exec-comp"><div class="exec-comp-num"><b>${comp}</b><small>%</small></div><div class="exec-comp-track"><span style="width:${comp}%;background:${st.color}"></span></div></div>
+        <button class="delete-btn exec-delete-btn rippleable" title="${lang==='ar'?'حذف الخاصية الرئيسية':'Delete Main Feature'}" onclick="softDeleteItem('MainFeature','${escapeAttr(m.featureId)}');event.stopPropagation();">${svg('x','icon-sm')}</button>
         <span class="exec-arrow">${svg('chevron')}</span></div></button>
     <div class="exec-body"${open?' style="max-height:none"':''}><div class="exec-body-inner">${groupedSubSections(displaySubs).map(sectionBlock).join('')}</div></div></div>`;}
 function scrollMainToStart(card){
@@ -1558,7 +1617,7 @@ function paintFeatures(){if(mode!=='online'&&mode!=='offline')return;
   filters.classList.add('show');titleEl.textContent=catLabel(selectedCategory);
   const baseMains=mainsIn(selectedCategory),subs=baseMains.flatMap(subsOf),displaySubs=baseMains.flatMap(displaySubsOf),sc=statCounts(subs);
   subEl.textContent=`${baseMains.length} ${tr('features')} · ${sc.total} ${tr('subFeatures')} · ${tr('completion')} ${sc.comp}%`;
-  renderCategorySummary(subs);
+  renderCategorySummary(subs);updateDeleteCategoryButton();
   const q=document.getElementById('searchInput').value.toLowerCase().trim(),ph=document.getElementById('phaseFilter').value,pr=document.getElementById('priorityFilter').value,stt=document.getElementById('statusFilter').value;
   const out=[];let idx=0;
   baseMains.forEach(m=>{const mn=mainNameMatch(m,q);
@@ -1695,6 +1754,123 @@ function updateSubStatus(subId,newStatus){
   showSaveIndicator('saving');
   if(saveDebounceTimer)clearTimeout(saveDebounceTimer);
   saveDebounceTimer=setTimeout(flushStatusSaves,SAVE_DEBOUNCE_MS);
+}
+
+
+/* ====================================================================
+   SOFT DELETE (keeps rows in Google Sheets)
+   ==================================================================== */
+function deleteText(){
+  return lang==='ar'
+    ? {cat:'حذف التصنيف',confirm:'هل أنت متأكد؟\nسيتم إخفاء العنصر من البوابة فقط وسيبقى محفوظاً في Google Sheet.',done:'تم الإخفاء من البوابة وبقي العنصر محفوظاً في الشيت',fail:'تعذّر الحذف',restored:'تمت استعادة العنصر وإظهاره في البوابة',restoreFail:'تعذّرت الاستعادة'}
+    : {cat:'Delete Category',confirm:'Are you sure?\nThe item will only be hidden from the portal and will remain stored in Google Sheet.',done:'Hidden from the portal and kept in the sheet',fail:'Delete failed',restored:'Item restored and shown in the portal',restoreFail:'Restore failed'};
+}
+function updateDeleteCategoryButton(){
+  const btn=document.getElementById('deleteCategoryBtn');
+  const txt=document.getElementById('deleteCategoryText');
+  if(!btn||!txt)return;
+  txt.textContent=deleteText().cat;
+  btn.style.display=(isAdminMode && selectedCategory && selectedCategory!=='All Features')?'inline-flex':'none';
+}
+function softDeleteCurrentCategory(){
+  if(!selectedCategory || selectedCategory==='All Features')return;
+  softDeleteItem('Category',selectedCategory);
+}
+function softDeleteItem(targetType,targetValue){
+  if(!requireAdmin())return;
+  const dt=deleteText();
+  if(!confirm(dt.confirm))return;
+
+  if(mode==='online'){
+    showSaveIndicator('saving');
+    apiPost({action:'softDeleteFeature',targetType:targetType,featureId:targetValue,category:targetValue})
+      .then(r=>{if(!r||!r.ok)throw new Error((r&&r.error)||'Delete failed');toast(dt.done,'note');return loadOnline(false);})
+      .then(()=>showSaveIndicator('saved'))
+      .catch(e=>{console.error(e);showSaveIndicator('failed');toast(dt.fail,'error');});
+    return;
+  }
+
+  // Offline/local preview: hide locally only.
+  softDeleteLocal(targetType,targetValue);
+  reindex();
+  paintFeatures();
+  renderMainDashboard(true);
+  renderDashboard(true);
+  toast(dt.done,'note');
+}
+function softDeleteLocal(targetType,targetValue){
+  const mark=s=>{if(!s)return;s.status='Not Used';s.isHidden=true;s.isCountable=false;};
+  if(targetType==='Category'){
+    DATA.mains.filter(m=>m.category===targetValue).forEach(m=>{mark(m);(m.subFeatures||[]).forEach(mark);});
+  }else if(targetType==='MainFeature'){
+    const m=BY_ID[targetValue];mark(m);if(m&&m.subFeatures)(m.subFeatures||[]).forEach(mark);
+  }else if(targetType==='SubSection'){
+    DATA.mains.forEach(m=>(m.subFeatures||[]).filter(s=>s.sectionId===targetValue||s.parentFeatureId===targetValue).forEach(mark));
+  }else{
+    mark(BY_ID[targetValue]);
+  }
+  DATA.mains.forEach(m=>recomputeMain(m));
+}
+
+/* ---------- RESTORE (Soft-delete reversal) ---------- */
+function restoreItem(targetType,targetValue){
+  if(!requireAdmin())return;
+  const dt=deleteText();
+  if(mode==='online'){
+    showSaveIndicator('saving');
+    apiPost({action:'restoreFeature',targetType:targetType,featureId:targetValue,category:targetValue})
+      .then(r=>{if(!r||!r.ok)throw new Error((r&&r.error)||'Restore failed');toast(dt.restored,'check');return loadOnline(false);})
+      .then(()=>{showSaveIndicator('saved');renderHidden();})
+      .catch(e=>{console.error(e);showSaveIndicator('failed');toast(dt.restoreFail,'error');});
+    return;
+  }
+  restoreLocal(targetType,targetValue);
+  reindex();renderHidden();paintFeatures();renderMainDashboard(true);
+  const active=document.querySelector('.view.active');if(active&&active.id==='dashboardView')renderDashboard(true);
+  toast(dt.restored,'check');
+}
+function restoreLocal(targetType,targetValue){
+  const un=s=>{if(!s)return;s.isHidden=false;s.isCountable=true;s.status='Not Verified';};
+  if(targetType==='Category'){
+    DATA.mains.filter(m=>m.category===targetValue).forEach(m=>{un(m);(m.subFeatures||[]).forEach(un);});
+  }else if(targetType==='MainFeature'){
+    const m=BY_ID[targetValue];un(m);if(m&&m.subFeatures)(m.subFeatures||[]).forEach(un);
+  }else if(targetType==='SubSection'){
+    DATA.mains.forEach(m=>(m.subFeatures||[]).filter(s=>s.sectionId===targetValue||s.parentFeatureId===targetValue).forEach(un));
+  }else{
+    un(BY_ID[targetValue]);
+  }
+  DATA.mains.forEach(m=>recomputeMain(m));
+}
+
+/* ---------- HIDDEN FEATURES PAGE ---------- */
+function rawCategories(){return [...new Set(DATA.mains.map(m=>m.category))];}
+function hiddenInventory(){
+  const cats=[],mains=[],subs=[];
+  rawCategories().forEach(cat=>{
+    const inCat=DATA.mains.filter(m=>m.category===cat);
+    if(inCat.length && inCat.every(m=>isHiddenItem(m))){cats.push({value:cat,label:catLabel(cat),count:inCat.length});return;}
+    inCat.forEach(m=>{
+      if(isHiddenItem(m)){mains.push({value:m.featureId,label:nameOf(m),cat:catLabel(cat)});}
+      else{(m.subFeatures||[]).filter(s=>isSubFeatureLevel(s)&&isHiddenItem(s)).forEach(s=>{subs.push({value:s.featureId,label:nameOf(s),cat:catLabel(cat),main:nameOf(m),ss:(lang==='ar'?(s.subSectionAr||s.subSection):s.subSection)||''});});}
+    });
+  });
+  return {cats,mains,subs};
+}
+function hiddenCard(type,value,label,meta,badge){
+  return `<div class="hidden-card"><div class="hidden-info"><span class="hidden-badge">${escapeHtml(badge)}</span><div class="hidden-name">${escapeHtml(label)}</div>${meta?`<div class="hidden-meta">${escapeHtml(meta)}</div>`:''}</div><button class="restore-btn rippleable" onclick="restoreItem('${type}','${escapeAttr(value)}')">${svg('check','icon-sm')}<span>${tr('restore')}</span></button></div>`;
+}
+function renderHidden(){
+  const host=document.getElementById('hiddenList');if(!host)return;
+  const intro=document.getElementById('hiddenIntro');if(intro)intro.textContent=tr('hiddenIntro');
+  if(mode!=='online'&&mode!=='offline'){host.innerHTML='';return;}
+  const {cats,mains,subs}=hiddenInventory();
+  if(!cats.length&&!mains.length&&!subs.length){host.innerHTML=`<div class="no-notes">${tr('noHidden')}</div>`;return;}
+  let html='';
+  if(cats.length){html+=`<div class="hidden-group-title">${tr('hCategories')}</div>`+cats.map(c=>hiddenCard('Category',c.value,c.label,`${c.count} ${tr('mainFeatures')}`,tr('catBadge'))).join('');}
+  if(mains.length){html+=`<div class="hidden-group-title">${tr('hMains')}</div>`+mains.map(m=>hiddenCard('MainFeature',m.value,m.label,m.cat,tr('mainBadge'))).join('');}
+  if(subs.length){html+=`<div class="hidden-group-title">${tr('hSubs')}</div>`+subs.map(s=>hiddenCard('SubFeature',s.value,s.label,[s.cat,s.main,s.ss].filter(Boolean).join(' · '),tr('subBadge'))).join('');}
+  host.innerHTML=html;
 }
 
 /* ====================================================================
@@ -1862,10 +2038,11 @@ function i18n(){updateAccessUI();document.body.classList.toggle('ar',lang==='ar'
   renderGuide();buildFilters();}
 function toggleLang(){const app=document.getElementById('app');app.classList.add('lang-fade');setTimeout(()=>{lang=lang==='en'?'ar':'en';localStorage.setItem('ah_lang',lang);renderShell();app.classList.remove('lang-fade');},190);}
 function switchView(id,btn){
-  if((id==='activityView'||id==='dashboardView')&&!isAdminMode){toast(adminText().need,'error');return;}
+  if((id==='activityView'||id==='dashboardView'||id==='hiddenView')&&!isAdminMode){toast(adminText().need,'error');return;}
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));document.getElementById(id).classList.add('active');
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');
   if(mode==='setup'||mode==='error'){fillState();return;}
+  if(id==='hiddenView')renderHidden();
   if(id==='mainDashboardView')renderMainDashboard(true);
   if(id==='dashboardView')renderDashboard(true);if(id==='trackerView')renderFeatures(!!selectedCategory);if(id==='activityView')refreshActivity();}
 
