@@ -917,14 +917,15 @@ textarea.am-input{min-height:70px;resize:vertical;line-height:1.6;}
 .export-date{display:none}
 @media print{
   @page{size:A4 portrait;margin:10mm}
-  html,body{width:210mm;min-height:297mm;background:#fff !important;overflow:visible !important}
+  html,body{width:210mm;background:#fff !important;overflow:visible !important}
   body{zoom:1 !important;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important}
   .top-nav,.category-sidebar,.filters,.note-btn,.status-select,.toast-wrap,.bd-toggle,.cmd-overlay,.cmd-hint,#pdfBtn,#mainPdfBtn,.main-tabs,.nav-actions,.back-top-btn{display:none!important}
   .layout{display:block!important;padding:0!important}
   .content{width:100%!important}
   .view{display:none!important}
   body.pdf-details #dashboardView, body.pdf-main #mainDashboardView{display:block!important}
-  body:not(.pdf-main):not(.pdf-details) #dashboardView{display:block!important}
+  body:not(.pdf-main):not(.pdf-details) .view.active{display:block!important}
+  #dashboardView,#mainDashboardView{height:auto!important;min-height:0!important;overflow:visible!important}
   .report-dashboard{gap:10px!important}
   .report-section,.status-card,.panel,.acc,.kpi-cell{box-shadow:none!important;background:#fff!important}
   .report-section{break-inside:avoid;page-break-inside:avoid;border:1px solid #D7DEE8!important;margin-bottom:8px!important;border-radius:14px!important}
@@ -1055,7 +1056,7 @@ textarea.am-input{min-height:70px;resize:vertical;line-height:1.6;}
     <section class="view" id="activityView">
       <div class="panel">
         <div class="panel-head"><span class="section-ic" data-ic="activity"></span><div class="panel-title" data-i18n="activityLog">Activity Log</div>
-          <div class="act-filter"><input type="date" id="activityDate" onchange="renderActivity()" /><button class="icon-btn rippleable" onclick="clearActivityDate()" data-ic="x"><span data-i18n="clear">Clear</span></button></div>
+          <div class="act-filter"><input type="date" id="activityDate" dir="ltr" lang="en-GB" style="direction:ltr;text-align:left" onchange="renderActivity()" /><button class="icon-btn rippleable" onclick="clearActivityDate()" data-ic="x"><span data-i18n="clear">Clear</span></button></div>
         </div>
         <div id="activityList"></div>
       </div>
@@ -1106,7 +1107,8 @@ textarea.am-input{min-height:70px;resize:vertical;line-height:1.6;}
       <datalist id="amCategoryList"></datalist>
 
       <label class="am-label" id="amMainNameLabel">Main Feature name</label>
-      <input id="amMainName" class="am-input" autocomplete="off" placeholder="" />
+      <input id="amMainName" class="am-input" list="amMainNameList" autocomplete="off" placeholder="" />
+      <datalist id="amMainNameList"></datalist>
 
       <label class="am-label" id="amDetailsHeadLabel">Details / Sub Features</label>
       <div id="amDetailsList"></div>
@@ -1178,7 +1180,7 @@ const STR={
     phaseProgress:"Phase Progress",categoryProgress:"Category Progress",exportPdf:"Export PDF",preparingPdf:"Preparing PDF…",subSections:"Sub-Sections",saveNote:"Save Note",notesHistory:"Notes History",
     all:"All Features",totalFeatures:"Sub-Features",mainFeatures:"Main Features",available:"Available",partial:"Partially Available",
     dashDetails:"Dashboard Details",viewDashDetails:"View Dashboard Details",addMainFeature:"Add Main Feature",exportExcel:"Export to Excel",
-    addNewCategory:"+ Add New Category",addNewSubSection:"+ Add New Sub Section",amCategory:"Category",amMainName:"Main Feature name",amSubSection:"Sub Section",amDetails:"Details / Sub Feature",amPhase:"Phase",amPriority:"Priority",amStatus:"Status",amSave:"Save",amCancel:"Cancel",amTitle:"Add Main Feature",amNewCatPh:"New category name",amNewSubPh:"New sub section name",amMainPh:"Main feature name",amDetailsPh:"Sub feature details",amAdded:"Main feature added",amNeedName:"Please enter the main feature and details",amNeedCat:"Please choose or enter a category",noneSub:"— None —",exportEmpty:"Nothing to export with the current filters",exported:"Excel file exported",mainCount:"Main Features",
+    addNewCategory:"+ Add New Category",addNewSubSection:"+ Add New Sub Section",amCategory:"Category",amMainName:"Main Feature name",amSubSection:"Sub Section",amDetails:"Details / Sub Feature",amPhase:"Phase",amPriority:"Priority",amStatus:"Status",amSave:"Save",amCancel:"Cancel",amTitle:"Add Main Feature",amNewCatPh:"New category name",amNewSubPh:"New sub section name",amMainPh:"Main feature name",amDetailsPh:"Sub feature details",amAdded:"Main feature added",amMerged:"Sub-features added to the existing main feature",amNeedName:"Please enter the main feature and details",amNeedCat:"Please choose or enter a category",noneSub:"— None —",exportEmpty:"Nothing to export with the current filters",exported:"Excel file exported",mainCount:"Main Features",
     amDetailsHead:"Details / Sub Features",amAddDetail:"+ Add detail",amDelDetail:"Remove",amSubFeaturePh:"Sub feature details",amSSPh:"Sub section (type or pick)",amPhasePh:"Phase",amPriorityPh:"Priority",amStatusPh:"Status",amCatPh:"Type or pick a category",amNeedDetail:"Please add at least one detail with text",amDetailWord:"Detail",
     na:"Not Available",nv:"Not Verified",completion:"Completion",features:"main features",subFeatures:"sub-features",
     allPhases:"All Phases",allPriorities:"All Priorities",allStatuses:"All Statuses",featureNotes:"Notes",phase:"Phase",priority:"Priority",status:"Status",
@@ -1198,7 +1200,7 @@ const STR={
     phaseProgress:"تقدّم المراحل",categoryProgress:"تقدّم التصنيفات",exportPdf:"تصدير PDF",preparingPdf:"جارٍ تجهيز PDF…",subSections:"الأقسام الفرعية",saveNote:"حفظ الملاحظة",notesHistory:"سجل الملاحظات",
     all:"جميع الخصائص",totalFeatures:"الخصائص الفرعية",mainFeatures:"الخصائص الرئيسية",available:"متوفر",partial:"متوفر جزئياً",
     dashDetails:"لوحة التحكم - التفاصيل",viewDashDetails:"عرض لوحة التحكم - التفاصيل",addMainFeature:"إضافة خاصية رئيسية",exportExcel:"تصدير إلى Excel",
-    addNewCategory:"+ إضافة تصنيف جديد",addNewSubSection:"+ إضافة قسم فرعي جديد",amCategory:"التصنيف",amMainName:"اسم الخاصية الرئيسية",amSubSection:"القسم الفرعي",amDetails:"التفاصيل / الخاصية الفرعية",amPhase:"المرحلة",amPriority:"الأولوية",amStatus:"الحالة",amSave:"حفظ",amCancel:"إلغاء",amTitle:"إضافة خاصية رئيسية",amNewCatPh:"اسم التصنيف الجديد",amNewSubPh:"اسم القسم الفرعي الجديد",amMainPh:"اسم الخاصية الرئيسية",amDetailsPh:"تفاصيل الخاصية الفرعية",amAdded:"تمت إضافة الخاصية الرئيسية",amNeedName:"يرجى إدخال اسم الخاصية الرئيسية والتفاصيل",amNeedCat:"يرجى اختيار أو إدخال تصنيف",noneSub:"— بدون —",exportEmpty:"لا توجد بيانات للتصدير حسب الفلاتر الحالية",exported:"تم تصدير ملف Excel",mainCount:"الخصائص الرئيسية",
+    addNewCategory:"+ إضافة تصنيف جديد",addNewSubSection:"+ إضافة قسم فرعي جديد",amCategory:"التصنيف",amMainName:"اسم الخاصية الرئيسية",amSubSection:"القسم الفرعي",amDetails:"التفاصيل / الخاصية الفرعية",amPhase:"المرحلة",amPriority:"الأولوية",amStatus:"الحالة",amSave:"حفظ",amCancel:"إلغاء",amTitle:"إضافة خاصية رئيسية",amNewCatPh:"اسم التصنيف الجديد",amNewSubPh:"اسم القسم الفرعي الجديد",amMainPh:"اسم الخاصية الرئيسية",amDetailsPh:"تفاصيل الخاصية الفرعية",amAdded:"تمت إضافة الخاصية الرئيسية",amMerged:"تمت إضافة الخصائص الفرعية إلى الخاصية الرئيسية الموجودة",amNeedName:"يرجى إدخال اسم الخاصية الرئيسية والتفاصيل",amNeedCat:"يرجى اختيار أو إدخال تصنيف",noneSub:"— بدون —",exportEmpty:"لا توجد بيانات للتصدير حسب الفلاتر الحالية",exported:"تم تصدير ملف Excel",mainCount:"الخصائص الرئيسية",
     amDetailsHead:"التفاصيل / الخصائص الفرعية",amAddDetail:"+ إضافة تفصيل",amDelDetail:"حذف",amSubFeaturePh:"تفاصيل الخاصية الفرعية",amSSPh:"القسم الفرعي (اكتب أو اختر)",amPhasePh:"المرحلة",amPriorityPh:"الأولوية",amStatusPh:"الحالة",amCatPh:"اكتب أو اختر تصنيفاً",amNeedDetail:"يرجى إضافة تفصيل واحد على الأقل مع نص",amDetailWord:"تفصيل",
     na:"غير متوفر",nv:"غير متحقق",completion:"الاكتمال",features:"خاصية رئيسية",subFeatures:"خاصية فرعية",
     allPhases:"كل المراحل",allPriorities:"كل الأولويات",allStatuses:"كل الحالات",featureNotes:"الملاحظات",phase:"المرحلة",priority:"الأولوية",status:"الحالة",
@@ -1405,6 +1407,13 @@ function loadOnline(initial){
       }
 
       mergeAddedMains();
+      mergeAddedSubs();   // sub-features appended locally to existing mains
+      // Re-apply locally cached status ONLY to locally-added items; sheet items keep their server status.
+      const localIds=new Set();
+      loadAddedMains().forEach(m=>(m.subFeatures||[]).forEach(s=>localIds.add(s.featureId)));
+      const dStore=loadAddedSubs();Object.values(dStore).forEach(arr=>(arr||[]).forEach(s=>localIds.add(s.featureId)));
+      if(localIds.size){const sm=JSON.parse(localStorage.getItem(LS.status)||'{}');
+        DATA.mains.forEach(m=>{(m.subFeatures||[]).forEach(x=>{if(localIds.has(x.featureId)&&sm[x.featureId])x.status=sm[x.featureId];});recomputeMain(m);});}
       mode='online';
       reindex();
       renderShell();
@@ -1416,9 +1425,10 @@ function loadOffline(){
   DATA.notes={};
   userNotes=JSON.parse(localStorage.getItem(LS.notes)||'{}');
   DATA.activity=JSON.parse(localStorage.getItem(LS.act)||'[]');
+  mergeAddedMains();                 // full new main features
+  mergeAddedSubs();                  // sub-features appended to existing mains
   const sm=JSON.parse(localStorage.getItem(LS.status)||'{}');
   DATA.mains.forEach(m=>{(m.subFeatures||[]).forEach(x=>{if(sm[x.featureId])x.status=sm[x.featureId];});recomputeMain(m);});
-  mergeAddedMains();
   mode='offline';reindex();renderShell();
 }
 function refreshAll(){if(mode==='online')return loadOnline(false);if(mode==='offline'){reindex();renderShell();}return Promise.resolve();}
@@ -1509,15 +1519,22 @@ function setExportDateLabel(){
   const el=document.getElementById('exportDateLabel');if(!el)return;
   const now=new Date();
   const ar=lang==='ar';
-  const date=now.toLocaleDateString(ar?'ar-SA':'en-GB',{year:'numeric',month:'long',day:'numeric'});
-  const time=now.toLocaleTimeString(ar?'ar-SA':'en-GB',{hour:'2-digit',minute:'2-digit'});
+  // Always Gregorian + Latin digits (DD-MM-YYYY · HH:MM) to avoid Hijri/locale ambiguity in the printout.
+  const p=n=>String(n).padStart(2,'0');
+  const date=`${p(now.getDate())}-${p(now.getMonth()+1)}-${now.getFullYear()}`;
+  const time=`${p(now.getHours())}:${p(now.getMinutes())}`;
   el.textContent=(ar?'تاريخ التصدير: ':'Export Date: ')+date+' · '+time;
 }
 function freezePrintValues(scope){
   const root=typeof scope==='string'?document.querySelector(scope):scope;if(!root)return;
   root.querySelectorAll('[data-count]').forEach(e=>{
-    const v=e.dataset.count||e.getAttribute('data-count')||e.textContent||'0';
-    e.textContent=v;e.dataset.done='1';
+    let v=e.dataset.count;
+    if(v==null||v==='')v=e.getAttribute('data-count');
+    if(v==null||v==='')v=e.textContent;
+    if(v==null||v==='')v='0';
+    // Match the on-screen formatting: decimals use fmtPct, integers are rounded.
+    const out=e.dataset.dec==='1'?fmtPct(parseFloat(v)||0):String(Math.round(parseFloat(v)||0));
+    e.textContent=out;e.dataset.done='1';
   });
   root.querySelectorAll('[data-w]').forEach(e=>{
     const w=e.dataset.w||e.getAttribute('data-w')||'0';
@@ -1525,8 +1542,22 @@ function freezePrintValues(scope){
   });
 }
 function prepDashboardForPrint(target){
-  const sel=target|| (document.body.classList.contains('pdf-main')?'#mainDashboardView':'#dashboardView');
+  // Decide which view is being printed: explicit target → body class → active view.
+  let sel=target;
+  if(!sel){
+    if(document.body.classList.contains('pdf-main'))sel='#mainDashboardView';
+    else if(document.body.classList.contains('pdf-details'))sel='#dashboardView';
+    else{const act=document.querySelector('.view.active');sel=act?('#'+act.id):'#mainDashboardView';}
+  }
+  // Repaint the target with final values (no skeleton) so nothing is caught mid-animation at 0.
+  try{
+    if(sel==='#mainDashboardView'&&typeof paintMainDashboard==='function')paintMainDashboard();
+    else if(sel==='#dashboardView'&&typeof paintDashboard==='function')paintDashboard();
+  }catch(e){}
   setExportDateLabel();
+  // Place the export-date banner at the very top of the printed view.
+  const viewEl=document.querySelector(sel),dateEl=document.getElementById('exportDateLabel');
+  if(viewEl&&dateEl){const host=viewEl.querySelector('.content')||viewEl;host.insertBefore(dateEl,host.firstChild);}
   document.querySelectorAll(sel+' .acc').forEach(a=>{
     a.classList.add('open');
     const body=a.querySelector('.acc-body');
@@ -1970,6 +2001,49 @@ function loadAddedMains(){try{return JSON.parse(localStorage.getItem(LS_ADDED)||
 function saveAddedMains(arr){try{localStorage.setItem(LS_ADDED,JSON.stringify(arr));}catch(e){}}
 function mergeAddedMains(){const added=loadAddedMains();added.forEach(m=>{if(!DATA.mains.some(x=>x.featureId===m.featureId)){const cm=JSON.parse(JSON.stringify(m));cm.subFeatures=(cm.subFeatures||[]).map(x=>({...x,isCountable:!isFalseValue(x.isCountable),isHidden:String(x.isHidden).toLowerCase()==='true'||String(x.isHidden)==='1'||x.status==='Not Used'}));recomputeMain(cm);DATA.mains.push(cm);}});}
 function genMainId(){let i=1;while(DATA.mains.some(m=>m.featureId==='UM'+i))i++;return 'UM'+i;}
+/* ---- Safe persistence for sub-features appended to an EXISTING main ----
+   Stored as a delta keyed by parent mainFeatureId, so embedded mains stay
+   untouched and the appended sub-features survive a reload. */
+const LS_ADDED_SUBS='ah_added_subs_v1';
+function loadAddedSubs(){try{return JSON.parse(localStorage.getItem(LS_ADDED_SUBS)||'{}');}catch(e){return {};}}
+function saveAddedSubs(obj){try{localStorage.setItem(LS_ADDED_SUBS,JSON.stringify(obj));}catch(e){}}
+function mergeAddedSubs(){
+  const store=loadAddedSubs();
+  Object.keys(store).forEach(mid=>{
+    const m=DATA.mains.find(x=>x.featureId===mid);
+    if(!m)return;                       // parent main not present → keep delta, skip silently
+    m.subFeatures=m.subFeatures||[];
+    (store[mid]||[]).forEach(sf=>{
+      if(!m.subFeatures.some(x=>x.featureId===sf.featureId)){
+        const cm={...sf,isCountable:!isFalseValue(sf.isCountable),isHidden:String(sf.isHidden).toLowerCase()==='true'||String(sf.isHidden)==='1'||sf.status==='Not Used'};
+        m.subFeatures.push(cm);
+      }
+    });
+  });
+}
+function genSubId(mid){let i=1;const exists=id=>DATA.mains.some(m=>(m.subFeatures||[]).some(s=>s.featureId===id));let id;do{id=mid+'-N'+String(i).padStart(3,'0');i++;}while(exists(id));return id;}
+function findMainByName(cat,name){const nm=(name||'').trim();return DATA.mains.find(m=>m.category===cat&&(((m.mainFeature||'').trim()===nm)||((nameOf(m)||'').trim()===nm)));}
+/* ---- FAIL-SAFE write-back of added features to Google Sheet ----
+   Uses the EXISTING server action `addFeature` (handled by addNewFeature_ in the
+   Apps Script): one call per sub-feature, and the server find-or-creates the main
+   and the sub-section itself. Runs only in online mode; on any failure we keep the
+   local copy so the app behaves exactly as before. No server change is required. */
+function removeAddedMain(fid){try{const a=loadAddedMains().filter(m=>m.featureId!==fid);saveAddedMains(a);}catch(e){}}
+function removeAddedSubs(mid,ids){try{const store=loadAddedSubs();if(store[mid]){store[mid]=store[mid].filter(s=>ids.indexOf(s.featureId)===-1);if(!store[mid].length)delete store[mid];saveAddedSubs(store);}}catch(e){}}
+function buildAddSpecs(cat,mainName,rows){
+  return rows.map(d=>({
+    action:'addFeature',category:cat,mainFeature:mainName,mainFeatureAr:mainName,
+    subSection:(d.ss&&(d.ss.en||d.ss.ar))||'',subSectionAr:(d.ss&&(d.ss.ar||d.ss.en))||'',
+    subFeature:d.text,subFeatureAr:d.text,phase:d.phase||'',priority:d.priority||'',status:d.status||'Not Verified'
+  }));
+}
+function pushAddedToSheet(specs,onResult){
+  if(mode!=='online'||!USE_SHEET||!specs||!specs.length){if(onResult)onResult(false);return;}
+  let ok=true;
+  // Sequential to respect the server-side LockService and keep ordering stable.
+  specs.reduce((p,sp)=>p.then(()=>apiPost(sp).then(r=>{if(!(r&&r.ok))ok=false;}).catch(()=>{ok=false;})),Promise.resolve())
+    .then(()=>{if(onResult)onResult(ok);});
+}
 let amSubsecOptions=[];
 function openAddMain(){
   if(!requireAdmin())return;
@@ -1991,6 +2065,7 @@ function openAddMain(){
   document.getElementById('amCategory').value='';
   document.getElementById('amMainName').value='';
   buildAmSubSections();
+  buildAmMainNames();
   document.getElementById('amDetailsList').innerHTML='';
   addDetailRow();
   document.getElementById('addMainOverlay').classList.add('open');
@@ -1998,7 +2073,17 @@ function openAddMain(){
 function closeAddMain(){document.getElementById('addMainOverlay').classList.remove('open');}
 function addMainOutside(e){if(e.target.id==='addMainOverlay')closeAddMain();}
 function resolveCategory(typed){const t=(typed||'').trim();if(!t)return'';const hit=catNames().find(c=>c===t||catLabel(c)===t);return hit||t;}
-function amCategoryChanged(){buildAmSubSections();}
+function amMainNamesFor(cat){
+  // Existing main-feature names within the chosen category (or all if none/unknown).
+  const pool=(cat&&catNames().includes(cat))?mainsIn(cat):DATA.mains;
+  return [...new Set(pool.map(m=>m.mainFeature||nameOf(m)).filter(Boolean))];
+}
+function buildAmMainNames(){
+  const cat=resolveCategory(document.getElementById('amCategory').value);
+  const list=document.getElementById('amMainNameList');
+  if(list)list.innerHTML=amMainNamesFor(cat).map(n=>`<option value="${escapeAttr(n)}"></option>`).join('');
+}
+function amCategoryChanged(){buildAmSubSections();buildAmMainNames();}
 function buildAmSubSections(){
   const cat=resolveCategory(document.getElementById('amCategory').value);
   const seen={};amSubsecOptions=[];
@@ -2039,13 +2124,49 @@ function submitAddMain(){
     status:resolveStatus(r.querySelector('.am-d-status').value)
   })).filter(d=>d.text);
   if(!rows.length){toast(tr('amNeedDetail'),'error');return;}
-  const mid=genMainId(),n=today(),dno=String(DATA.mains.length+1);
+  const n=today();
+  const existing=findMainByName(cat,mainName);
+  if(existing){
+    // ===== Merge the new sub-features into the existing main (no duplicate main) =====
+    const subs=existing.subFeatures||(existing.subFeatures=[]);
+    const dno=String(existing.displayNo||(DATA.mains.indexOf(existing)+1));
+    const firstPriority=rows[0].priority||(subs[0]&&subs[0].priority)||'Priority 1';
+    // Map existing sub-sections to their section numbers; continue numbering for new ones.
+    const secByKey={};let maxSec=0;
+    subs.forEach(s=>{const skey=(s.subSection||'')+'||'+(s.subSectionAr||'');
+      const sd=String(s.sectionDisplayNo||'');const dot=sd.lastIndexOf('.');const no=dot>=0?(parseInt(sd.slice(dot+1))||0):0;
+      if(!secByKey[skey])secByKey[skey]={no:no,id:s.sectionId||(existing.featureId+'.S'+(no||1)),seq:0};
+      secByKey[skey].seq++;if(no>maxSec)maxSec=no;});
+    const newSubs=rows.map(d=>{
+      const skey=(d.ss.en||'')+'||'+(d.ss.ar||'');
+      if(!secByKey[skey]){maxSec++;secByKey[skey]={no:maxSec,id:existing.featureId+'.S'+maxSec,seq:0};}
+      const sec=secByKey[skey];sec.seq++;
+      const sub={featureId:genSubId(existing.featureId),displayNo:dno+'.'+sec.no+'-'+String(sec.seq).padStart(2,'0'),sectionDisplayNo:dno+'.'+sec.no,parentFeatureId:existing.featureId,mainFeatureId:existing.featureId,sectionId:sec.id,level:'SubFeature',englishName:d.text,arabicName:d.text,category:cat,mainFeature:existing.mainFeature||mainName,subSection:d.ss.en,subSectionAr:d.ss.ar,phase:d.phase,priority:d.priority||firstPriority,status:d.status,calculatedStatus:'',completionRate:'',isCountable:true,isHidden:false,originalStatus:d.status,lastReviewDate:'',lastUpdatedDate:n.date,lastUpdatedTime:n.time};
+      subs.push(sub);return sub;
+    });
+    existing.lastUpdatedDate=n.date;existing.lastUpdatedTime=n.time;
+    // Persist appended sub-features locally first (always safe).
+    const store=loadAddedSubs();store[existing.featureId]=(store[existing.featureId]||[]).concat(JSON.parse(JSON.stringify(newSubs)));saveAddedSubs(store);
+    reindex();recomputeMain(existing);
+    if(mode==='offline')persistOffline();
+    // Then, online only: write to the sheet via the server's addFeature (find-or-create handled server-side).
+    // On success drop the local copy (sheet owns it); on failure keep it.
+    pushAddedToSheet(buildAddSpecs(cat,existing.mainFeature||mainName,rows),ok=>{if(ok){removeAddedSubs(existing.featureId,newSubs.map(s=>s.featureId));}});
+    closeAddMain();
+    renderCategories(false);renderMainDashboard(false);
+    const act=document.querySelector('.view.active');if(act&&act.id==='dashboardView')renderDashboard(false);
+    if(act&&act.id==='trackerView')paintFeatures();
+    showSaveIndicator('saved');toast(tr('amMerged')||tr('amAdded'),'check');
+    return;
+  }
+  // ===== Create a brand-new main feature =====
+  const mid=genMainId(),dno=String(DATA.mains.length+1);
   const firstPriority=rows[0].priority||'Priority 1';
   // Group sub-features by sub-section to assign section numbers/ids
   const sectionMap={};let sectionSeq=0;const seqBySection={};let globalSeq=0;
   const subFeatures=rows.map(d=>{
     const skey=(d.ss.en||'')+'||'+(d.ss.ar||'');
-    if(!sectionMap[skey]){sectionSeq++;sectionMap[skey]={no:sectionSeq,id:mid+'.S'+sectionSeq};seqBySection[skey]=0;}
+    if(!sectionMap[skey]){sectionSeq++;sectionMap[skey]={no:sectionSeq,id:mid+'.S'+sectionSeq,en:d.ss.en,ar:d.ss.ar};seqBySection[skey]=0;}
     const sec=sectionMap[skey];seqBySection[skey]++;globalSeq++;
     return{featureId:mid+'-'+String(globalSeq).padStart(3,'0'),displayNo:dno+'.'+sec.no+'-'+String(seqBySection[skey]).padStart(2,'0'),sectionDisplayNo:dno+'.'+sec.no,parentFeatureId:mid,mainFeatureId:mid,sectionId:sec.id,level:'SubFeature',englishName:d.text,arabicName:d.text,category:cat,mainFeature:mainName,subSection:d.ss.en,subSectionAr:d.ss.ar,phase:d.phase,priority:d.priority||firstPriority,status:d.status,calculatedStatus:'',completionRate:'',isCountable:true,isHidden:false,originalStatus:d.status,lastReviewDate:'',lastUpdatedDate:n.date,lastUpdatedTime:n.time};
   });
@@ -2054,6 +2175,9 @@ function submitAddMain(){
   const added=loadAddedMains();added.push(main);saveAddedMains(added);
   reindex();recomputeMain(main);
   if(mode==='offline')persistOffline();
+  // Online only: write to the sheet via the server's addFeature (find-or-create handled server-side).
+  // On success drop the local copy (sheet owns it); on failure keep it.
+  pushAddedToSheet(buildAddSpecs(cat,mainName,rows),ok=>{if(ok){removeAddedMain(mid);}});
   closeAddMain();
   renderCategories(false);renderMainDashboard(false);
   const active=document.querySelector('.view.active');if(active&&active.id==='dashboardView')renderDashboard(false);
