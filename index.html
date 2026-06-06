@@ -1149,6 +1149,7 @@ textarea.am-input{min-height:70px;resize:vertical;line-height:1.6;}
         <div class="filter-actions">
           <div class="save-indicator" id="saveIndicator"><span class="dot"></span><span id="saveIndicatorText"></span></div>
           <button class="filter-btn rippleable admin-only" id="addMainBtn" onclick="openAddMain()" data-ic="check"><span data-i18n="addMainFeature">Add Main Feature</span></button>
+          <button class="filter-btn rippleable admin-only" id="clearLocalBtn" onclick="clearLocalData()" data-ic="trash" title="مسح الإضافات المحفوظة على هذا الجهاز"><span>مسح المحلي · Clear Local</span></button>
           <button class="filter-btn rippleable" id="exportExcelBtn" onclick="exportExcel()" data-ic="download"><span data-i18n="exportExcel">Export to Excel</span></button>
           <button class="filter-btn rippleable" id="collapseAllBtn" onclick="collapseAll()" data-ic="layers"><span data-i18n="collapseAll">Collapse All</span></button>
           <button class="filter-btn clear rippleable" id="clearFiltersBtn" onclick="clearFilters()" data-ic="x"><span data-i18n="clearFilters">Clear Filters</span></button>
@@ -2173,6 +2174,18 @@ function findMainByName(cat,name){
    local copy so the app behaves exactly as before. No server change is required. */
 function removeAddedMain(fid){try{const a=loadAddedMains().filter(m=>m.featureId!==fid);saveAddedMains(a);}catch(e){}}
 function removeAddedSubs(mid,ids){try{const store=loadAddedSubs();if(store[mid]){store[mid]=store[mid].filter(s=>ids.indexOf(s.featureId)===-1);if(!store[mid].length)delete store[mid];saveAddedSubs(store);}}catch(e){}}
+function clearLocalData(){
+  if(!requireAdmin())return;
+  const m=loadAddedMains(),s=loadAddedSubs();
+  const nMains=(m||[]).length, nSubs=Object.values(s||{}).reduce((a,arr)=>a+(arr||[]).length,0);
+  if(!nMains&&!nSubs){toast(lang==='ar'?'لا توجد إضافات محلية':'No local additions','check');return;}
+  if(!confirm(lang==='ar'
+      ?('سيتم مسح '+nMains+' خاصية رئيسية و'+nSubs+' تفصيلاً أُضيفت على هذا الجهاز ولم تُحفظ في قوقل شيت.\nالبيانات الموجودة في الشيت لن تتأثر. متابعة؟')
+      :('Clear '+nMains+' main feature(s) and '+nSubs+' detail(s) added on this device (not saved to the Sheet)?\nSheet data is unaffected.')))return;
+  try{localStorage.removeItem('ah_added_mains_v1');localStorage.removeItem('ah_added_subs_v1');}catch(e){}
+  toast(lang==='ar'?'تم مسح البيانات المحلية':'Local data cleared','check');
+  if(mode==='online'&&USE_SHEET)refreshAll(); else location.reload();
+}
 function buildAddSpecs(cat,mainName,mainNameAr,rows){
   return rows.map(d=>({
     action:'addFeature',category:cat,categoryAr:CAT_AR_RT[cat]||CAT_AR[cat]||cat,mainFeature:mainName,mainFeatureAr:mainNameAr||mainName,
