@@ -1391,6 +1391,129 @@ body:not(.ar) .row-actions .note-count{
   .sub-phase .mini-badge,.sub-priority .mini-badge,.status-display-badge{font-size:10.5px !important;}
 }
 
+
+
+/* ===== Final fix: Phase dashboard cards same layout as top status cards ===== */
+#phaseBreakdown .bd-inner{
+  padding:18px 20px 20px !important;
+}
+#phaseBreakdown .kpi-grid{
+  grid-template-columns:repeat(7,minmax(150px,1fr)) !important;
+  gap:14px !important;
+  align-items:stretch !important;
+}
+#phaseBreakdown .kpi-cell{
+  background:#fff !important;
+  border:1px solid var(--border) !important;
+  border-radius:var(--r-lg) !important;
+  padding:18px 16px !important;
+  min-height:150px !important;
+  box-shadow:var(--shadow-sm) !important;
+  display:flex !important;
+  flex-direction:column !important;
+  justify-content:space-between !important;
+  text-align:center !important;
+  overflow:hidden !important;
+}
+#phaseBreakdown .kpi-cell::before{
+  inset:0 0 auto 0 !important;
+  width:100% !important;
+  height:5px !important;
+  background:var(--kc,var(--primary)) !important;
+}
+body.ar #phaseBreakdown .kpi-cell::before{
+  left:0 !important;
+  right:0 !important;
+}
+#phaseBreakdown .kpi-label{
+  font-size:12px !important;
+  font-weight:850 !important;
+  color:var(--text) !important;
+  letter-spacing:0 !important;
+  text-transform:none !important;
+  line-height:1.35 !important;
+  min-height:32px !important;
+  display:flex !important;
+  align-items:flex-start !important;
+  justify-content:center !important;
+}
+#phaseBreakdown .kpi-val{
+  margin-top:8px !important;
+  color:var(--kc,var(--primary)) !important;
+  display:flex !important;
+  flex-direction:column !important;
+  align-items:center !important;
+  justify-content:center !important;
+  flex:1 1 auto !important;
+}
+#phaseBreakdown .kpi-val:not(.sm){
+  font-size:42px !important;
+  line-height:1 !important;
+  font-weight:950 !important;
+  letter-spacing:-.04em !important;
+}
+#phaseBreakdown .kpi-val:not(.sm) small{
+  font-size:18px !important;
+  font-weight:850 !important;
+  margin-inline-start:2px !important;
+}
+#phaseBreakdown .kpi-val.sm{
+  font-size:inherit !important;
+  margin-top:6px !important;
+}
+#phaseBreakdown .kpi-percent{
+  font-size:42px !important;
+  line-height:1 !important;
+  font-weight:950 !important;
+  letter-spacing:-.04em !important;
+  color:var(--kc,var(--primary)) !important;
+}
+#phaseBreakdown .kpi-percent small{
+  font-size:18px !important;
+  font-weight:850 !important;
+  margin-inline-start:2px !important;
+}
+#phaseBreakdown .kpi-count{
+  margin-top:12px !important;
+  font-size:13px !important;
+  font-weight:850 !important;
+  color:#94A3B8 !important;
+  direction:ltr !important;
+  unicode-bidi:isolate !important;
+  letter-spacing:0 !important;
+}
+#phaseBreakdown .kpi-track{
+  width:100% !important;
+  height:9px !important;
+  border-radius:999px !important;
+  background:var(--neutral-bg) !important;
+  overflow:hidden !important;
+  margin-top:14px !important;
+  box-shadow:inset 0 1px 2px rgba(15,23,42,.05) !important;
+}
+#phaseBreakdown .kpi-fill{
+  height:100% !important;
+  width:0;
+  border-radius:999px !important;
+  background:linear-gradient(90deg,var(--kc,var(--primary)),color-mix(in srgb,var(--kc,var(--primary)) 55%,#fff)) !important;
+  transition:width 1s var(--ease-out) !important;
+}
+#phaseBreakdown .acc-bar{
+  display:none !important;
+}
+@media(max-width:1300px){
+  #phaseBreakdown .kpi-grid{grid-template-columns:repeat(4,minmax(150px,1fr)) !important;}
+}
+@media(max-width:800px){
+  #phaseBreakdown .kpi-grid{grid-template-columns:repeat(2,minmax(140px,1fr)) !important;}
+}
+@media(max-width:520px){
+  #phaseBreakdown .kpi-grid{grid-template-columns:1fr !important;}
+}
+@media print{
+  #phaseBreakdown .kpi-fill{width:var(--pdf-w,0%) !important;min-width:2px !important;}
+}
+
 </style>
 </head>
 <body>
@@ -2006,6 +2129,11 @@ function statusCardsHTML(s){return STAT_DEFS.map((it,i)=>{const st=statusMeta(it
     <div class="status-count">${cnt} / ${s.total}</div>
     <div class="status-track"><div class="status-fill" data-w="${p}"></div></div></article>`;}).join('');}
 function kpiCell(label,val,color,suf,small){return `<div class="kpi-cell" style="--kc:${color}"><div class="kpi-label">${label}</div><div class="kpi-val ${small?'sm':''}">${small?val:`<span data-count="${val}" ${suf?'data-dec="1"':''}>0</span>${suf?'<small>'+suf+'</small>':''}`}</div></div>`;}
+function kpiCountPct(label,count,total,color){
+  const p=pct(count,total);
+  const text=`<div class="kpi-percent"><span data-count="${p}" data-dec="1">0</span><small>%</small></div><div class="kpi-count">${count} / ${total}</div><div class="kpi-track"><div class="kpi-fill" data-w="${p}"></div></div>`;
+  return kpiCell(label,text,color,'',true);
+}
 function breakdownHTML(label,subtitle,accent,idx,pillHTML,kpiCells,comp){
   return `<div class="acc" style="--accent:${accent};animation-delay:${idx*50}ms">
     <button class="acc-head rippleable" onclick="toggleAcc(this)"><span class="bd-dot"></span>
@@ -2022,7 +2150,7 @@ function paintDashboard(){const mains=DATA.mains,subs=allSubs(),s=statCounts(sub
   const cEl=document.querySelector('#completionSection [data-count]');if(cEl){cEl.dataset.count=s.comp;cEl.dataset.dec='1';cEl.dataset.done='0';}
   const cf=document.getElementById('completionFill');cf.dataset.w=s.comp;cf.dataset.wdone='0';cf.style.width=s.comp+'%';cf.style.setProperty('--pdf-w',s.comp+'%');
   document.getElementById('overallStatusCards').innerHTML=statusCardsHTML(s);
-  const dashKpis=(c)=>kpiCell(tr('overallCompletion'),c.comp,'#1855A4','%')+kpiCell(tr('available')+' %',pct(c.available,c.total),'#22C55E','%')+kpiCell(tr('partial')+' %',pct(c.partial,c.total),'#F59E0B','%')+kpiCell(tr('na')+' %',pct(c.na,c.total),'#DC2626','%')+kpiCell(tr('nv')+' %',pct(c.nv,c.total),'#64748B','%');
+  const dashKpis=(c)=>kpiCell(tr('overallCompletion'),c.comp,'#1855A4','%')+kpiCountPct(tr('available'),c.available,c.total,'#22C55E')+kpiCountPct(tr('partial'),c.partial,c.total,'#F59E0B')+kpiCountPct(tr('na'),c.na,c.total,'#DC2626')+kpiCountPct(tr('nv'),c.nv,c.total,'#64748B');
   document.getElementById('phaseBreakdown').innerHTML=PHASES.map((p,i)=>{
     const leaves=subs.filter(x=>x.phase===p),c=statCounts(leaves),ss=PHASE_SUBSECTIONS[p]||0;
     const pill=`<span class="bd-pill">${tr('overallCompletion')}: <b>${c.comp}%</b></span>`;
@@ -2216,17 +2344,20 @@ function saveFeatureDetails(){
   if(noChange){closeFeatureEditModal();return;}
   const btn=document.getElementById('featureEditSaveBtn');if(btn)btn.disabled=true;
   showSaveIndicator('saving');
-  const apply=()=>{s.arabicName=arabicName;s.englishName=englishName;s.phase=phase;s.priority=priority;s.status=status;const n=today();s.lastUpdatedDate=n.date;s.lastUpdatedTime=n.time;DATA.mains.forEach(m=>recomputeMain(m));};
-  const rollback=()=>{s.arabicName=prev.arabicName;s.englishName=prev.englishName;s.phase=prev.phase;s.priority=prev.priority;s.status=prev.status;if(btn)btn.disabled=false;showSaveIndicator('failed');toast(tr('saveFailed'),'error');};
-  const done=()=>{apply();if(btn)btn.disabled=false;closeFeatureEditModal();buildFilters();paintFeatures();setTimeout(()=>{const row=document.getElementById('sub-'+cssId(id));markRowEdited(row);},80);showSaveIndicator('saved');toast(tr('saved'),'note');};
+  const apply=()=>{s.arabicName=arabicName;s.englishName=englishName;s.phase=phase;s.priority=priority;s.status=status;s.isHidden=(status==='Not Used');const n=today();s.lastUpdatedDate=n.date;s.lastUpdatedTime=n.time;DATA.mains.forEach(m=>recomputeMain(m));};
+  const restore=()=>{s.arabicName=prev.arabicName;s.englishName=prev.englishName;s.phase=prev.phase;s.priority=prev.priority;s.status=prev.status;s.isHidden=(prev.status==='Not Used');DATA.mains.forEach(m=>recomputeMain(m));};
+  const refreshAfterLocal=()=>{if(btn)btn.disabled=false;closeFeatureEditModal();buildFilters();paintFeatures();renderMainDashboard(false);renderDashboard(false);setTimeout(()=>{const row=document.getElementById('sub-'+cssId(id));markRowEdited(row);},80);};
+
+  // Fast optimistic save: update the screen immediately, then sync to Google Sheet.
+  apply();refreshAfterLocal();showSaveIndicator('saved');toast(tr('saved'),'note');
   if(mode==='online'){
     apiPost({action:'updateFeatureDetails',featureId:id,arabicName,englishName,phase,priority,status})
-      .then(r=>{if(!r||!r.ok)throw new Error((r&&r.error)||'Update failed');done();})
-      .catch(rollback);
+      .then(r=>{if(!r||!(r.ok||r.success||r.saved))throw new Error((r&&r.error)||'Update failed');})
+      .catch(()=>{restore();buildFilters();paintFeatures();renderMainDashboard(false);renderDashboard(false);showSaveIndicator('failed');toast(tr('saveFailed'),'error');});
   }else{
     const n=today();
-    DATA.activity.unshift({id:'A'+String(DATA.activity.length+1).padStart(4,'0'),fid:id,type:'Feature Details Change',oldStatus:'',newStatus:'Updated',date:n.date,time:n.time});
-    apply();persistOffline();done();
+    DATA.activity.unshift({id:'A'+String(DATA.activity.length+1).padStart(4,'0'),fid:id,type:'Feature Details Change',oldStatus:prev.status,newStatus:status,date:n.date,time:n.time});
+    persistOffline();
   }
 }
 
@@ -2379,7 +2510,7 @@ function updateSubName(subId,value){
   const done=()=>{const n=today();s.lastUpdatedDate=n.date;s.lastUpdatedTime=n.time;setRowUpdatedLabel(s);showSaveIndicator('saved');toast(tr('saved'),'note');paintFeatures();};
   if(mode==='online'){
     apiPost({action:'updateFeatureMeta',featureId:subId,field:field,value:value})
-      .then(r=>{if(!r||!r.ok)throw new Error((r&&r.error)||'Update failed');done();})
+      .then(r=>{if(!r||!(r.ok||r.success||r.saved))throw new Error((r&&r.error)||'Update failed');done();})
       .catch(rollback);
   }else{
     const n=today();DATA.activity.unshift({id:'A'+String(DATA.activity.length+1).padStart(4,'0'),fid:subId,type:'Name Change',oldStatus:prev,newStatus:value,date:n.date,time:n.time});persistOffline();done();
@@ -2402,7 +2533,7 @@ function updateSubMeta(subId,field,value){
   const done=()=>{const n=today();s.lastUpdatedDate=n.date;s.lastUpdatedTime=n.time;setRowUpdatedLabel(s);paintRowMeta(s,field,false);showSaveIndicator('saved');toast(tr('saved'),'note');if(parent)updateParentCard(parent);buildFilters();};
   if(mode==='online'){
     apiPost({action:'updateFeatureMeta',featureId:subId,field:field,value:value||''})
-      .then(r=>{if(!r||!r.ok)throw new Error((r&&r.error)||'Update failed');done();})
+      .then(r=>{if(!r||!(r.ok||r.success||r.saved))throw new Error((r&&r.error)||'Update failed');done();})
       .catch(rollback);
   }else{
     const n=today();DATA.activity.unshift({id:'A'+String(DATA.activity.length+1).padStart(4,'0'),fid:subId,type:action,oldStatus:prev,newStatus:value||'',date:n.date,time:n.time});
@@ -2424,7 +2555,7 @@ function flushStatusSaves(){
     showSaveIndicator('saving');
     Promise.all(batch.map(c=>
       apiPost({action:'updateFeatureStatus',featureId:c.id,newStatus:c.next})
-        .then(r=>{if(!r||!r.ok)throw new Error((r&&r.error)||'Update failed');return{c,ok:true};})
+        .then(r=>{if(!r||!(r.ok||r.success||r.saved))throw new Error((r&&r.error)||'Update failed');return{c,ok:true};})
         .catch(()=>({c,ok:false}))
     )).then(results=>{
       const failed=results.filter(r=>!r.ok).map(r=>r.c);
@@ -2492,7 +2623,7 @@ function renderNotesPanel(){const o=BY_ID[currentFeatureId];if(!o)return;const p
 function saveNote(){if(!requireAdmin())return;const t=document.getElementById('noteText').value.trim();if(!t||!currentFeatureId){toast(tr('errorEmpty'),'error');return;}
   if(mode==='online'){toast(tr('syncing'));
     apiPost({action:'saveNote',featureId:currentFeatureId,note:t,source:'User Note'})
-      .then(r=>{if(!r||!r.ok)throw 0;document.getElementById('noteText').value='';return Promise.all([apiGet('getNotes',{featureId:currentFeatureId}),apiGet('getActivityLog')]);})
+      .then(r=>{if(!r||!(r.ok||r.success||r.saved))throw 0;document.getElementById('noteText').value='';return Promise.all([apiGet('getNotes',{featureId:currentFeatureId}),apiGet('getActivityLog')]);})
       .then(([nr,ar])=>{if(nr&&nr.notes)DATA.notes[currentFeatureId]=nr.notes.map(n=>({noteId:n.noteId,featureId:currentFeatureId,date:n.date,time:n.time,source:n.source||'User Note',note:n.note||''}));
         if(ar&&ar.activity)DATA.activity=ar.activity.map(x=>({id:x.activityId,fid:x.featureId,type:x.activityType,oldStatus:x.oldStatus,newStatus:x.newStatus,date:x.date,time:x.time}));
         renderNotesPanel();renderActivity();updateNoteCount(currentFeatureId);toast(tr('noteSaved'),'note');})
