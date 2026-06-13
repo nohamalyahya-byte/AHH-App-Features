@@ -1394,15 +1394,18 @@ body:not(.ar) .row-actions .note-count{
 
 
 /* ===== Final fix: Phase dashboard cards same layout as top status cards ===== */
-#phaseBreakdown .bd-inner{
+#phaseBreakdown .bd-inner,
+#mainPhaseBreakdown .bd-inner{
   padding:18px 20px 20px !important;
 }
-#phaseBreakdown .kpi-grid{
+#phaseBreakdown .kpi-grid,
+#mainPhaseBreakdown .kpi-grid{
   grid-template-columns:repeat(7,minmax(150px,1fr)) !important;
   gap:14px !important;
   align-items:stretch !important;
 }
-#phaseBreakdown .kpi-cell{
+#phaseBreakdown .kpi-cell,
+#mainPhaseBreakdown .kpi-cell{
   background:#fff !important;
   border:1px solid var(--border) !important;
   border-radius:var(--r-lg) !important;
@@ -1415,17 +1418,20 @@ body:not(.ar) .row-actions .note-count{
   text-align:center !important;
   overflow:hidden !important;
 }
-#phaseBreakdown .kpi-cell::before{
+#phaseBreakdown .kpi-cell,
+#mainPhaseBreakdown .kpi-cell::before{
   inset:0 0 auto 0 !important;
   width:100% !important;
   height:5px !important;
   background:var(--kc,var(--primary)) !important;
 }
-body.ar #phaseBreakdown .kpi-cell::before{
+body.ar #phaseBreakdown .kpi-cell,
+#mainPhaseBreakdown .kpi-cell::before{
   left:0 !important;
   right:0 !important;
 }
-#phaseBreakdown .kpi-label{
+#phaseBreakdown .kpi-label,
+#mainPhaseBreakdown .kpi-label{
   font-size:12px !important;
   font-weight:850 !important;
   color:var(--text) !important;
@@ -1437,7 +1443,8 @@ body.ar #phaseBreakdown .kpi-cell::before{
   align-items:flex-start !important;
   justify-content:center !important;
 }
-#phaseBreakdown .kpi-val{
+#phaseBreakdown .kpi-val,
+#mainPhaseBreakdown .kpi-val{
   margin-top:8px !important;
   color:var(--kc,var(--primary)) !important;
   display:flex !important;
@@ -1446,34 +1453,40 @@ body.ar #phaseBreakdown .kpi-cell::before{
   justify-content:center !important;
   flex:1 1 auto !important;
 }
-#phaseBreakdown .kpi-val:not(.sm){
+#phaseBreakdown .kpi-val,
+#mainPhaseBreakdown .kpi-val:not(.sm){
   font-size:42px !important;
   line-height:1 !important;
   font-weight:950 !important;
   letter-spacing:-.04em !important;
 }
-#phaseBreakdown .kpi-val:not(.sm) small{
+#phaseBreakdown .kpi-val,
+#mainPhaseBreakdown .kpi-val:not(.sm) small{
   font-size:18px !important;
   font-weight:850 !important;
   margin-inline-start:2px !important;
 }
-#phaseBreakdown .kpi-val.sm{
+#phaseBreakdown .kpi-val,
+#mainPhaseBreakdown .kpi-val.sm{
   font-size:inherit !important;
   margin-top:6px !important;
 }
-#phaseBreakdown .kpi-percent{
+#phaseBreakdown .kpi-percent,
+#mainPhaseBreakdown .kpi-percent{
   font-size:42px !important;
   line-height:1 !important;
   font-weight:950 !important;
   letter-spacing:-.04em !important;
   color:var(--kc,var(--primary)) !important;
 }
-#phaseBreakdown .kpi-percent small{
+#phaseBreakdown .kpi-percent,
+#mainPhaseBreakdown .kpi-percent small{
   font-size:18px !important;
   font-weight:850 !important;
   margin-inline-start:2px !important;
 }
-#phaseBreakdown .kpi-count{
+#phaseBreakdown .kpi-count,
+#mainPhaseBreakdown .kpi-count{
   margin-top:12px !important;
   font-size:13px !important;
   font-weight:850 !important;
@@ -1482,7 +1495,8 @@ body.ar #phaseBreakdown .kpi-cell::before{
   unicode-bidi:isolate !important;
   letter-spacing:0 !important;
 }
-#phaseBreakdown .kpi-track{
+#phaseBreakdown .kpi-track,
+#mainPhaseBreakdown .kpi-track{
   width:100% !important;
   height:9px !important;
   border-radius:999px !important;
@@ -1491,27 +1505,33 @@ body.ar #phaseBreakdown .kpi-cell::before{
   margin-top:14px !important;
   box-shadow:inset 0 1px 2px rgba(15,23,42,.05) !important;
 }
-#phaseBreakdown .kpi-fill{
+#phaseBreakdown .kpi-fill,
+#mainPhaseBreakdown .kpi-fill{
   height:100% !important;
   width:0;
   border-radius:999px !important;
   background:linear-gradient(90deg,var(--kc,var(--primary)),color-mix(in srgb,var(--kc,var(--primary)) 55%,#fff)) !important;
   transition:width 1s var(--ease-out) !important;
 }
-#phaseBreakdown .acc-bar{
+#phaseBreakdown .acc-bar,
+#mainPhaseBreakdown .acc-bar{
   display:none !important;
 }
 @media(max-width:1300px){
-  #phaseBreakdown .kpi-grid{grid-template-columns:repeat(4,minmax(150px,1fr)) !important;}
+  #phaseBreakdown .kpi-grid,
+  #mainPhaseBreakdown .kpi-grid{grid-template-columns:repeat(4,minmax(150px,1fr)) !important;}
 }
 @media(max-width:800px){
-  #phaseBreakdown .kpi-grid{grid-template-columns:repeat(2,minmax(140px,1fr)) !important;}
+  #phaseBreakdown .kpi-grid,
+  #mainPhaseBreakdown .kpi-grid{grid-template-columns:repeat(2,minmax(140px,1fr)) !important;}
 }
 @media(max-width:520px){
-  #phaseBreakdown .kpi-grid{grid-template-columns:1fr !important;}
+  #phaseBreakdown .kpi-grid,
+  #mainPhaseBreakdown .kpi-grid{grid-template-columns:1fr !important;}
 }
 @media print{
-  #phaseBreakdown .kpi-fill{width:var(--pdf-w,0%) !important;min-width:2px !important;}
+  #phaseBreakdown .kpi-fill,
+  #mainPhaseBreakdown .kpi-fill{width:var(--pdf-w,0%) !important;min-width:2px !important;}
 }
 
 </style>
@@ -2819,12 +2839,16 @@ function mainCountsPhase(list,phase){
 }
 function paintMainDashboard(){
   const mains=DATA.mains,c=mainCountsBy(mains);
-  const chip=document.getElementById('mainOverallTotalChip');if(chip)chip.innerHTML=svg('layers','icon-sm')+`${mains.length} ${tr('mainFeatures')}`;
+  const mainFeaturesLabel=()=>lang==='ar'?'الخصائص الرئيسية':'Main Features';
+  const totalMainFeaturesLabel=()=>lang==='ar'?'إجمالي الخصائص الرئيسية':'Total Main Features';
+  const phaseFeaturesLabel=()=>lang==='ar'?'خصائص ضمن المرحلة':'Features in Phase';
+  const phaseFeaturesSubLabel=()=>lang==='ar'?'خاصية ضمن المرحلة':'Features in this Phase';
+  const chip=document.getElementById('mainOverallTotalChip');if(chip)chip.innerHTML=svg('layers','icon-sm')+`${mains.length} ${mainFeaturesLabel()}`;
   const cards=document.getElementById('mainOverallCards');if(cards)cards.innerHTML=statusCardsHTML(c);
-  const dashKpis=(x)=>kpiCell(tr('overallCompletion'),x.comp,'#1855A4','%')+kpiCell(tr('available')+' %',pct(x.available,x.total),'#22C55E','%')+kpiCell(tr('partial')+' %',pct(x.partial,x.total),'#F59E0B','%')+kpiCell(tr('na')+' %',pct(x.na,x.total),'#DC2626','%')+kpiCell(tr('nv')+' %',pct(x.nv,x.total),'#64748B','%');
-  let html=breakdownHTML(tr('all'),`${mains.length} ${tr('mainFeatures')}`,'#1855A4',0,`<span class="bd-pill">${tr('overallCompletion')}: <b>${c.comp}%</b></span>`,kpiCell(tr('mainCount'),mains.length,'#7499C8')+dashKpis(c),c.comp);
+  const dashKpis=(x)=>kpiCountPct(tr('overallCompletion'),Math.round((x.available*100+x.partial*50)/100),x.total,'#1855A4')+kpiCountPct(tr('available'),x.available,x.total,'#22C55E')+kpiCountPct(tr('partial'),x.partial,x.total,'#F59E0B')+kpiCountPct(tr('na'),x.na,x.total,'#DC2626')+kpiCountPct(tr('nv'),x.nv,x.total,'#64748B');
+  let html=breakdownHTML(tr('all'),`${mains.length} ${mainFeaturesLabel()}`,'#1855A4',0,`<span class="bd-pill">${tr('overallCompletion')}: <b>${c.comp}%</b></span>`,kpiCell(totalMainFeaturesLabel(),mains.length,'#7499C8')+dashKpis(c),c.comp);
   PHASES.forEach((p,i)=>{const pc=mainCountsPhase(mains,p);
-    html+=breakdownHTML(phaseLabel(p),`${pc.total} ${tr('mainFeatures')}`,PHASE_ACCENT[p]||'#1855A4',i+1,`<span class="bd-pill">${tr('overallCompletion')}: <b>${pc.comp}%</b></span>`,kpiCell(tr('mainCount'),pc.total,'#7499C8')+dashKpis(pc),pc.comp);});
+    html+=breakdownHTML(phaseLabel(p),`${pc.total} ${phaseFeaturesSubLabel()}`,PHASE_ACCENT[p]||'#1855A4',i+1,`<span class="bd-pill">${tr('overallCompletion')}: <b>${pc.comp}%</b></span>`,kpiCell(phaseFeaturesLabel(),pc.total,'#7499C8')+dashKpis(pc),pc.comp);});
   const host=document.getElementById('mainPhaseBreakdown');if(host)host.innerHTML=html;
   animateCounts(document.getElementById('mainOverallSection'));animateFills(document.getElementById('mainDashboardView'));
 }
