@@ -1871,7 +1871,14 @@ const USE_SHEET=!!SHEET_API_URL;
 function apiGet(action,params){const u=new URL(SHEET_API_URL);u.searchParams.set('action',action);if(params)Object.entries(params).forEach(([k,v])=>u.searchParams.set(k,v));return fetch(u.toString()).then(r=>r.json());}
 function apiPost(payload){
   const pass=localStorage.getItem(ADMIN_PASS_KEY)||'';
-  return fetch(SHEET_API_URL,{method:'POST',body:JSON.stringify({...payload,adminPassword:pass})}).then(r=>r.json());
+  return fetch(SHEET_API_URL,{
+    method:'POST',
+    headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body:JSON.stringify({...payload,adminPassword:pass})
+  }).then(r=>r.text()).then(t=>{
+    try{return JSON.parse(t);}
+    catch(e){throw new Error('bad_response: '+String(t||'').slice(0,180));}
+  });
 }
 function syncSidebarVisibility(viewId){
   const id=viewId || (document.querySelector('.view.active')?document.querySelector('.view.active').id:'mainDashboardView');
@@ -2368,13 +2375,30 @@ function saveFeatureDetails(){
   const restore=()=>{s.arabicName=prev.arabicName;s.englishName=prev.englishName;s.phase=prev.phase;s.priority=prev.priority;s.status=prev.status;s.isHidden=(prev.status==='Not Used');DATA.mains.forEach(m=>recomputeMain(m));};
   const refreshAfterLocal=()=>{if(btn)btn.disabled=false;closeFeatureEditModal();buildFilters();paintFeatures();renderMainDashboard(false);renderDashboard(false);setTimeout(()=>{const row=document.getElementById('sub-'+cssId(id));markRowEdited(row);},80);};
 
-  // Fast optimistic save: update the screen immediately, then sync to Google Sheet.
-  apply();refreshAfterLocal();showSaveIndicator('saved');toast(tr('saved'),'note');
+  // Save to Google Sheet first, then update the screen after the server confirms.
   if(mode==='online'){
-    apiPost({action:'updateFeatureDetails',featureId:id,arabicName,englishName,phase,priority,status})
-      .then(r=>{if(!r||!(r.ok||r.success||r.saved))throw new Error((r&&r.error)||'Update failed');})
-      .catch(()=>{restore();buildFilters();paintFeatures();renderMainDashboard(false);renderDashboard(false);showSaveIndicator('failed');toast(tr('saveFailed'),'error');});
+    apiPost({
+      action:'updateFeatureDetails',featureId:id,
+      arabicName,englishName,phase,priority,status,
+      statusChanged:(prev.status!==status)
+    })
+      .then(r=>{
+        if(!r||!(r.ok||r.success||r.saved))throw new Error((r&&r.error)||'Update failed');
+        apply();
+        if(r.lastUpdatedDate)s.lastUpdatedDate=r.lastUpdatedDate;
+        if(r.lastUpdatedTime)s.lastUpdatedTime=r.lastUpdatedTime;
+        refreshAfterLocal();
+        showSaveIndicator('saved');
+        toast(tr('saved'),'note');
+      })
+      .catch(err=>{
+        console.error('saveFeatureDetails failed',err);
+        if(btn)btn.disabled=false;
+        showSaveIndicator('failed');
+        toast(tr('saveFailed'),'error');
+      });
   }else{
+    apply();refreshAfterLocal();showSaveIndicator('saved');toast(tr('saved'),'note');
     const n=today();
     DATA.activity.unshift({id:'A'+String(DATA.activity.length+1).padStart(4,'0'),fid:id,type:'Feature Details Change',oldStatus:prev.status,newStatus:status,date:n.date,time:n.time});
     persistOffline();
