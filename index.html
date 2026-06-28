@@ -1993,6 +1993,65 @@ function mainCountsBy(list){const st=list.map(m=>mainStatus(m));const total=st.l
 function notesFor(id){if(mode==='offline')return [...(userNotes[id]||[]),...(OFFLINE_NOTES[id]||[])];return DATA.notes[id]||[];}
 function today(){const d=new Date();return{date:d.toISOString().slice(0,10),time:d.toTimeString().slice(0,8)};}
 
+/* ---------- Viewport lock: keep the page exactly where the user edited ---------- */
+function captureViewport(anchorId){
+  const anchor=anchorId?document.getElementById('sub-'+cssId(anchorId)):null;
+  const active=document.activeElement;
+  return {
+    x:window.scrollX||0,
+    y:window.scrollY||0,
+    anchorId:anchorId||'',
+    anchorTop:anchor?anchor.getBoundingClientRect().top:null,
+    selectedCategory:selectedCategory,
+    openMainId:openMainId,
+    activeId:active&&active.id?active.id:'',
+    activeName:active&&active.name?active.name:''
+  };
+}
+function _safeCssEscape(v){return (window.CSS&&CSS.escape)?CSS.escape(v):String(v).replace(/"/g,'\"');}
+function restoreViewport(snap,opts){
+  if(!snap)return;
+  opts=opts||{};
+  if(snap.selectedCategory)selectedCategory=snap.selectedCategory;
+  if(snap.openMainId)openMainId=snap.openMainId;
+  requestAnimationFrame(()=>{
+    let y=snap.y;
+    const anchor=snap.anchorId?document.getElementById('sub-'+cssId(snap.anchorId)):null;
+    if(anchor&&snap.anchorTop!=null){
+      y=(window.scrollY||0)+anchor.getBoundingClientRect().top-snap.anchorTop;
+    }
+    window.scrollTo(snap.x,Math.max(0,Math.round(y)));
+    if(opts.focus){
+      let el=snap.activeId?document.getElementById(snap.activeId):null;
+      if(!el&&snap.activeName)el=document.querySelector('[name="'+_safeCssEscape(snap.activeName)+'"]');
+      if(el&&typeof el.focus==='function')el.focus({preventScroll:true});
+    }
+    if(opts.mark&&anchor)markRowEdited(anchor);
+  });
+}
+function withViewportLock(anchorId,fn,opts){const snap=captureViewport(anchorId);const out=fn&&fn();restoreViewport(snap,opts);setTimeout(()=>restoreViewport(snap,opts),80);return out;}
+function refreshTrackerCounters(){
+  if(!selectedCategory)return;
+  const baseMains=mainsIn(selectedCategory),subs=baseMains.flatMap(subsOf),sc=statCounts(subs);
+  const subEl=document.getElementById('selectedCategorySub');
+  if(subEl)subEl.textContent=`${baseMains.length} ${tr('features')} · ${sc.total} ${tr('subFeatures')} · ${tr('completion')} ${sc.comp}%`;
+  renderCategorySummary(subs);
+}
+function paintFeatureRowOnly(id){
+  const s=BY_ID[id],row=document.getElementById('sub-'+cssId(id));
+  if(!s||!row)return false;
+  const nm=nameOf(s);
+  row.querySelectorAll('.sub-name-text').forEach(el=>{el.textContent=nm;});
+  row.querySelectorAll('.sub-name-input').forEach(el=>{el.value=nm;});
+  paintRowMeta(s,null,false);
+  paintRowStatus(s,false);
+  setRowUpdatedLabel(s);
+  const parent=BY_ID[s.mainFeatureId||s.parentFeatureId];
+  if(parent)updateParentCard(parent);
+  refreshTrackerCounters();
+  return true;
+}
+
 /* ---------- Ripple / animations ---------- */
 document.addEventListener('pointerdown',e=>{const t=e.target.closest('.rippleable');if(!t)return;
   const r=t.getBoundingClientRect(),size=Math.max(r.width,r.height),s=document.createElement('span');
@@ -2370,9 +2429,21 @@ function saveFeatureDetails(){
   const noChange=prev.arabicName===arabicName&&prev.englishName===englishName&&prev.phase===phase&&prev.priority===priority&&prev.status===status;
   if(noChange){closeFeatureEditModal();return;}
   const apply=()=>{s.arabicName=arabicName;s.englishName=englishName;s.phase=phase;s.priority=priority;s.status=status;s.isHidden=(status==='Not Used');const n=today();s.lastUpdatedDate=n.date;s.lastUpdatedTime=n.time;DATA.mains.forEach(m=>recomputeMain(m));};
-  const refreshAfterLocal=()=>{closeFeatureEditModal();buildFilters();paintFeatures();renderMainDashboard(false);renderDashboard(false);setTimeout(()=>{const row=document.getElementById('sub-'+cssId(id));markRowEdited(row);},80);};
+  const refreshAfterLocal=()=>{
+    const snap=captureViewport(id);
+    closeFeatureEditModal();
+    buildFilters();
+    const updatedInPlace=paintFeatureRowOnly(id);
+    if(!updatedInPlace){
+      paintFeatures();
+    }
+    renderMainDashboard(false);
+    renderDashboard(false);
+    restoreViewport(snap,{mark:true});
+    setTimeout(()=>restoreViewport(snap,{mark:true}),90);
+  };
 
-  // Fast save: update the screen immediately, then save the latest version in the background.
+  // Fast save: update the same row immediately, then save the latest version in the background.
   apply();
   refreshAfterLocal();
   if(mode==='online'){
@@ -2424,11 +2495,8 @@ function flushFeatureDetailSaves(){
     showSaveIndicator('saved');
     return;
   }
-  Promise.all(entries.map(([id,item])=>
-    apiPost(item.payload)
-      .then(r=>({id,item,ok:!!(r&&(r.ok||r.success||r.saved)),res:r}))
-      .catch(err=>({id,item,ok:false,err}))
-  )).then(results=>{
+  const updates=entries.map(([id,item])=>({id,item,payload:{...item.payload,action:undefined}}));
+  const applyResults=(results)=>{
     const failed = results.filter(x=>!x.ok);
     results.filter(x=>x.ok).forEach(x=>{
       const f=BY_ID[x.id]; if(!f) return;
@@ -2444,7 +2512,18 @@ function flushFeatureDetailSaves(){
       showSaveIndicator('saved');
       toast(tr('saved'),'note');
     }
-  });
+  };
+  apiPost({action:'batchUpdateFeatureDetails',updates:updates.map(x=>x.payload)})
+    .then(r=>{
+      if(!r||!r.ok)throw new Error((r&&r.error)||'batch failed');
+      const byId={};(r.results||[]).forEach(x=>{byId[x.featureId]=x;});
+      applyResults(updates.map(x=>({id:x.id,item:x.item,ok:!!(byId[x.id]&&byId[x.id].ok),res:byId[x.id]||r})));
+    })
+    .catch(()=>Promise.all(entries.map(([id,item])=>
+      apiPost(item.payload)
+        .then(r=>({id,item,ok:!!(r&&(r.ok||r.success||r.saved)),res:r}))
+        .catch(err=>({id,item,ok:false,err}))
+    )).then(applyResults));
 }
 
 function groupedSubSections(list){const groups=[];const map={};list.forEach(s=>{const key=s.sectionId||s.subSection||'__none';if(!map[key]){map[key]={id:key,en:s.subSection||'',ar:s.subSectionAr||'',items:[]};groups.push(map[key]);}map[key].items.push(s);});return groups;}
@@ -2592,8 +2671,8 @@ function updateSubName(subId,value){
   s[field]=value;
   const row=document.getElementById('sub-'+cssId(subId));
   markRowEdited(row);showSaveIndicator('saving');
-  const rollback=()=>{s[field]=prev;paintFeatures();showSaveIndicator('failed');};
-  const done=()=>{const n=today();s.lastUpdatedDate=n.date;s.lastUpdatedTime=n.time;setRowUpdatedLabel(s);showSaveIndicator('saved');toast(tr('saved'),'note');paintFeatures();};
+  const rollback=()=>{s[field]=prev;withViewportLock(subId,()=>paintFeatures(),{mark:true});showSaveIndicator('failed');};
+  const done=()=>{const n=today();s.lastUpdatedDate=n.date;s.lastUpdatedTime=n.time;paintFeatureRowOnly(subId);showSaveIndicator('saved');toast(tr('saved'),'note');};
   if(mode==='online'){
     done();
     queueFeatureDetailSave(subId, {...s,[field]:prev});
@@ -2637,18 +2716,25 @@ function flushStatusSaves(){
 
   if(mode==='online'){
     showSaveIndicator('saving');
-    Promise.all(batch.map(c=>
-      apiPost({action:'updateFeatureStatus',featureId:c.id,newStatus:c.next})
-        .then(r=>{if(!r||!(r.ok||r.success||r.saved))throw new Error((r&&r.error)||'Update failed');return{c,ok:true};})
-        .catch(()=>({c,ok:false}))
-    )).then(results=>{
+    const finish=(results)=>{
       const failed=results.filter(r=>!r.ok).map(r=>r.c);
       reenable();
       if(failed.length){
         failed.forEach(c=>{const s=BY_ID[c.id];if(s){s.status=c.prev;s.isHidden=(c.prev==='Not Used');paintRowStatus(s,false);updateParentCard(BY_ID[c.parentId]);}});
         showSaveIndicator('failed');
       }else{stamp();showSaveIndicator('saved');toast(tr('saved'),'note');}
-    });
+    };
+    apiPost({action:'batchUpdateFeatureStatuses',updates:batch.map(c=>({featureId:c.id,newStatus:c.next}))})
+      .then(r=>{
+        if(!r||!r.ok)throw new Error((r&&r.error)||'batch failed');
+        const byId={};(r.results||[]).forEach(x=>{byId[x.featureId]=x;});
+        finish(batch.map(c=>({c,ok:!!(byId[c.id]&&byId[c.id].ok)})));
+      })
+      .catch(()=>Promise.all(batch.map(c=>
+        apiPost({action:'updateFeatureStatus',featureId:c.id,newStatus:c.next})
+          .then(r=>{if(!r||!(r.ok||r.success||r.saved))throw new Error((r&&r.error)||'Update failed');return{c,ok:true};})
+          .catch(()=>({c,ok:false}))
+      )).then(finish));
     return;
   }
 
