@@ -2369,40 +2369,82 @@ function saveFeatureDetails(){
   const prev={arabicName:s.arabicName||'',englishName:s.englishName||'',phase:s.phase||'',priority:s.priority||'',status:s.status||''};
   const noChange=prev.arabicName===arabicName&&prev.englishName===englishName&&prev.phase===phase&&prev.priority===priority&&prev.status===status;
   if(noChange){closeFeatureEditModal();return;}
-  const btn=document.getElementById('featureEditSaveBtn');if(btn)btn.disabled=true;
-  showSaveIndicator('saving');
   const apply=()=>{s.arabicName=arabicName;s.englishName=englishName;s.phase=phase;s.priority=priority;s.status=status;s.isHidden=(status==='Not Used');const n=today();s.lastUpdatedDate=n.date;s.lastUpdatedTime=n.time;DATA.mains.forEach(m=>recomputeMain(m));};
-  const restore=()=>{s.arabicName=prev.arabicName;s.englishName=prev.englishName;s.phase=prev.phase;s.priority=prev.priority;s.status=prev.status;s.isHidden=(prev.status==='Not Used');DATA.mains.forEach(m=>recomputeMain(m));};
-  const refreshAfterLocal=()=>{if(btn)btn.disabled=false;closeFeatureEditModal();buildFilters();paintFeatures();renderMainDashboard(false);renderDashboard(false);setTimeout(()=>{const row=document.getElementById('sub-'+cssId(id));markRowEdited(row);},80);};
+  const refreshAfterLocal=()=>{closeFeatureEditModal();buildFilters();paintFeatures();renderMainDashboard(false);renderDashboard(false);setTimeout(()=>{const row=document.getElementById('sub-'+cssId(id));markRowEdited(row);},80);};
 
-  // Save to Google Sheet first, then update the screen after the server confirms.
+  // Fast save: update the screen immediately, then save the latest version in the background.
+  apply();
+  refreshAfterLocal();
   if(mode==='online'){
-    apiPost({
-      action:'updateFeatureDetails',featureId:id,
-      arabicName,englishName,phase,priority,status,
-      statusChanged:(prev.status!==status)
-    })
-      .then(r=>{
-        if(!r||!(r.ok||r.success||r.saved))throw new Error((r&&r.error)||'Update failed');
-        apply();
-        if(r.lastUpdatedDate)s.lastUpdatedDate=r.lastUpdatedDate;
-        if(r.lastUpdatedTime)s.lastUpdatedTime=r.lastUpdatedTime;
-        refreshAfterLocal();
-        showSaveIndicator('saved');
-        toast(tr('saved'),'note');
-      })
-      .catch(err=>{
-        console.error('saveFeatureDetails failed',err);
-        if(btn)btn.disabled=false;
-        showSaveIndicator('failed');
-        toast(tr('saveFailed'),'error');
-      });
+    queueFeatureDetailSave(id, prev);
   }else{
-    apply();refreshAfterLocal();showSaveIndicator('saved');toast(tr('saved'),'note');
+    showSaveIndicator('saved');toast(tr('saved'),'note');
     const n=today();
     DATA.activity.unshift({id:'A'+String(DATA.activity.length+1).padStart(4,'0'),fid:id,type:'Feature Details Change',oldStatus:prev.status,newStatus:status,date:n.date,time:n.time});
     persistOffline();
   }
+}
+
+
+
+/* ---------- fast background save queue for feature text/meta edits ----------
+   Allows multiple edits in a row. The UI updates immediately, then the latest
+   version of each edited feature is saved once after the user pauses briefly. */
+const pendingDetailSaves = {};
+let detailSaveTimer = null;
+function queueFeatureDetailSave(featureId, snapshotBefore){
+  const s = BY_ID[featureId];
+  if(!s) return;
+  pendingDetailSaves[featureId] = {
+    before: pendingDetailSaves[featureId]?.before || snapshotBefore || null,
+    payload: {
+      action:'updateFeatureDetails',
+      featureId: featureId,
+      arabicName: s.arabicName || '',
+      englishName: s.englishName || '',
+      phase: s.phase || '',
+      priority: s.priority || '',
+      status: s.status || '',
+      statusChanged: !!(snapshotBefore && snapshotBefore.status !== (s.status || ''))
+    }
+  };
+  showSaveIndicator('saving');
+  clearTimeout(detailSaveTimer);
+  detailSaveTimer = setTimeout(flushFeatureDetailSaves, 900);
+}
+function flushFeatureDetailSaves(){
+  detailSaveTimer = null;
+  const entries = Object.entries(pendingDetailSaves);
+  if(!entries.length) return;
+  entries.forEach(([id])=>delete pendingDetailSaves[id]);
+  if(mode!=='online'){
+    const n=today();
+    entries.forEach(([id])=>{const f=BY_ID[id]; if(f){f.lastUpdatedDate=n.date; f.lastUpdatedTime=n.time; setRowUpdatedLabel(f);}});
+    persistOffline();
+    showSaveIndicator('saved');
+    return;
+  }
+  Promise.all(entries.map(([id,item])=>
+    apiPost(item.payload)
+      .then(r=>({id,item,ok:!!(r&&(r.ok||r.success||r.saved)),res:r}))
+      .catch(err=>({id,item,ok:false,err}))
+  )).then(results=>{
+    const failed = results.filter(x=>!x.ok);
+    results.filter(x=>x.ok).forEach(x=>{
+      const f=BY_ID[x.id]; if(!f) return;
+      if(x.res&&x.res.lastUpdatedDate) f.lastUpdatedDate=x.res.lastUpdatedDate;
+      if(x.res&&x.res.lastUpdatedTime) f.lastUpdatedTime=x.res.lastUpdatedTime;
+      setRowUpdatedLabel(f);
+    });
+    if(failed.length){
+      console.error('Some detail saves failed', failed);
+      showSaveIndicator('failed');
+      toast(tr('saveFailed'),'error');
+    }else{
+      showSaveIndicator('saved');
+      toast(tr('saved'),'note');
+    }
+  });
 }
 
 function groupedSubSections(list){const groups=[];const map={};list.forEach(s=>{const key=s.sectionId||s.subSection||'__none';if(!map[key]){map[key]={id:key,en:s.subSection||'',ar:s.subSectionAr||'',items:[]};groups.push(map[key]);}map[key].items.push(s);});return groups;}
@@ -2553,9 +2595,8 @@ function updateSubName(subId,value){
   const rollback=()=>{s[field]=prev;paintFeatures();showSaveIndicator('failed');};
   const done=()=>{const n=today();s.lastUpdatedDate=n.date;s.lastUpdatedTime=n.time;setRowUpdatedLabel(s);showSaveIndicator('saved');toast(tr('saved'),'note');paintFeatures();};
   if(mode==='online'){
-    apiPost({action:'updateFeatureMeta',featureId:subId,field:field,value:value})
-      .then(r=>{if(!r||!(r.ok||r.success||r.saved))throw new Error((r&&r.error)||'Update failed');done();})
-      .catch(rollback);
+    done();
+    queueFeatureDetailSave(subId, {...s,[field]:prev});
   }else{
     const n=today();DATA.activity.unshift({id:'A'+String(DATA.activity.length+1).padStart(4,'0'),fid:subId,type:'Name Change',oldStatus:prev,newStatus:value,date:n.date,time:n.time});persistOffline();done();
   }
@@ -2576,9 +2617,8 @@ function updateSubMeta(subId,field,value){
   const rollback=()=>{s[field]=prev;paintRowMeta(s,field,false);showSaveIndicator('failed');};
   const done=()=>{const n=today();s.lastUpdatedDate=n.date;s.lastUpdatedTime=n.time;setRowUpdatedLabel(s);paintRowMeta(s,field,false);showSaveIndicator('saved');toast(tr('saved'),'note');if(parent)updateParentCard(parent);buildFilters();};
   if(mode==='online'){
-    apiPost({action:'updateFeatureMeta',featureId:subId,field:field,value:value||''})
-      .then(r=>{if(!r||!(r.ok||r.success||r.saved))throw new Error((r&&r.error)||'Update failed');done();})
-      .catch(rollback);
+    done();
+    queueFeatureDetailSave(subId, {...s,[field]:prev});
   }else{
     const n=today();DATA.activity.unshift({id:'A'+String(DATA.activity.length+1).padStart(4,'0'),fid:subId,type:action,oldStatus:prev,newStatus:value||'',date:n.date,time:n.time});
     persistOffline();done();
