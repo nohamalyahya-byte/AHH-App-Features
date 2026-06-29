@@ -280,6 +280,7 @@ body.ar .feature-card::before{left:auto;right:0}
 .tl-desc{font-size:11px;color:var(--muted);margin-top:4px;line-height:1.5}
 .tl-status-chip{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:3px 9px;font-size:10px;font-weight:850}
 .tl-text{font-size:12px;line-height:1.65;color:var(--text);margin-top:4px}
+.tl-item.pending .tl-card{border-color:#FCD34D;background:#FFFBEB}
 .no-notes{text-align:center;color:var(--muted);padding:26px 10px;font-size:12px}
 
 /* notes panel */
@@ -1869,16 +1870,38 @@ const STR={
 /* ---------- API ---------- */
 const USE_SHEET=!!SHEET_API_URL;
 function apiGet(action,params){const u=new URL(SHEET_API_URL);u.searchParams.set('action',action);if(params)Object.entries(params).forEach(([k,v])=>u.searchParams.set(k,v));return fetch(u.toString()).then(r=>r.json());}
-function apiPost(payload){
+
+/* Stable Save Engine v2.0
+   - Serializes all write requests to avoid Google Apps Script LockService conflicts.
+   - Retries temporary failures automatically.
+   - Prevents overlapping saves when the user changes status, details, and notes quickly. */
+let __writeQueue=Promise.resolve();
+function wait(ms){return new Promise(res=>setTimeout(res,ms));}
+function apiPostRaw(payload){
   const pass=localStorage.getItem(ADMIN_PASS_KEY)||'';
-  return fetch(SHEET_API_URL,{
-    method:'POST',
-    headers:{'Content-Type':'text/plain;charset=utf-8'},
-    body:JSON.stringify({...payload,adminPassword:pass})
-  }).then(r=>r.text()).then(t=>{
-    try{return JSON.parse(t);}
-    catch(e){throw new Error('bad_response: '+String(t||'').slice(0,180));}
-  });
+  const body=JSON.stringify({...payload,adminPassword:pass});
+  return fetch(SHEET_API_URL,{method:'POST',body})
+    .then(r=>r.text())
+    .then(t=>{try{return JSON.parse(t||'{}');}catch(e){return{ok:false,error:'bad_response',raw:t};}});
+}
+function apiPost(payload){
+  const run=async()=>{
+    let lastErr=null;
+    for(let attempt=0;attempt<3;attempt++){
+      try{
+        const r=await apiPostRaw(payload);
+        if(r&&(r.ok||r.success||r.saved))return r;
+        lastErr=new Error((r&&r.error)||'save_failed');
+        // Retry only transient/lock/server style failures; unauthorized should return immediately.
+        if(String(lastErr.message).toLowerCase().includes('unauthorized'))throw lastErr;
+      }catch(e){lastErr=e;}
+      await wait(500+(attempt*850));
+    }
+    throw lastErr||new Error('save_failed');
+  };
+  const job=__writeQueue.then(run,run);
+  __writeQueue=job.catch(()=>{});
+  return job;
 }
 function syncSidebarVisibility(viewId){
   const id=viewId || (document.querySelector('.view.active')?document.querySelector('.view.active').id:'mainDashboardView');
@@ -1992,65 +2015,6 @@ function mainCountsBy(list){const st=list.map(m=>mainStatus(m));const total=st.l
   return{total,available:a,partial:p,na:n,nv:v,comp:total?Math.round((a*100+p*50)/total*100)/100:0};}
 function notesFor(id){if(mode==='offline')return [...(userNotes[id]||[]),...(OFFLINE_NOTES[id]||[])];return DATA.notes[id]||[];}
 function today(){const d=new Date();return{date:d.toISOString().slice(0,10),time:d.toTimeString().slice(0,8)};}
-
-/* ---------- Viewport lock: keep the page exactly where the user edited ---------- */
-function captureViewport(anchorId){
-  const anchor=anchorId?document.getElementById('sub-'+cssId(anchorId)):null;
-  const active=document.activeElement;
-  return {
-    x:window.scrollX||0,
-    y:window.scrollY||0,
-    anchorId:anchorId||'',
-    anchorTop:anchor?anchor.getBoundingClientRect().top:null,
-    selectedCategory:selectedCategory,
-    openMainId:openMainId,
-    activeId:active&&active.id?active.id:'',
-    activeName:active&&active.name?active.name:''
-  };
-}
-function _safeCssEscape(v){return (window.CSS&&CSS.escape)?CSS.escape(v):String(v).replace(/"/g,'\"');}
-function restoreViewport(snap,opts){
-  if(!snap)return;
-  opts=opts||{};
-  if(snap.selectedCategory)selectedCategory=snap.selectedCategory;
-  if(snap.openMainId)openMainId=snap.openMainId;
-  requestAnimationFrame(()=>{
-    let y=snap.y;
-    const anchor=snap.anchorId?document.getElementById('sub-'+cssId(snap.anchorId)):null;
-    if(anchor&&snap.anchorTop!=null){
-      y=(window.scrollY||0)+anchor.getBoundingClientRect().top-snap.anchorTop;
-    }
-    window.scrollTo(snap.x,Math.max(0,Math.round(y)));
-    if(opts.focus){
-      let el=snap.activeId?document.getElementById(snap.activeId):null;
-      if(!el&&snap.activeName)el=document.querySelector('[name="'+_safeCssEscape(snap.activeName)+'"]');
-      if(el&&typeof el.focus==='function')el.focus({preventScroll:true});
-    }
-    if(opts.mark&&anchor)markRowEdited(anchor);
-  });
-}
-function withViewportLock(anchorId,fn,opts){const snap=captureViewport(anchorId);const out=fn&&fn();restoreViewport(snap,opts);setTimeout(()=>restoreViewport(snap,opts),80);return out;}
-function refreshTrackerCounters(){
-  if(!selectedCategory)return;
-  const baseMains=mainsIn(selectedCategory),subs=baseMains.flatMap(subsOf),sc=statCounts(subs);
-  const subEl=document.getElementById('selectedCategorySub');
-  if(subEl)subEl.textContent=`${baseMains.length} ${tr('features')} · ${sc.total} ${tr('subFeatures')} · ${tr('completion')} ${sc.comp}%`;
-  renderCategorySummary(subs);
-}
-function paintFeatureRowOnly(id){
-  const s=BY_ID[id],row=document.getElementById('sub-'+cssId(id));
-  if(!s||!row)return false;
-  const nm=nameOf(s);
-  row.querySelectorAll('.sub-name-text').forEach(el=>{el.textContent=nm;});
-  row.querySelectorAll('.sub-name-input').forEach(el=>{el.value=nm;});
-  paintRowMeta(s,null,false);
-  paintRowStatus(s,false);
-  setRowUpdatedLabel(s);
-  const parent=BY_ID[s.mainFeatureId||s.parentFeatureId];
-  if(parent)updateParentCard(parent);
-  refreshTrackerCounters();
-  return true;
-}
 
 /* ---------- Ripple / animations ---------- */
 document.addEventListener('pointerdown',e=>{const t=e.target.closest('.rippleable');if(!t)return;
@@ -2428,102 +2392,23 @@ function saveFeatureDetails(){
   const prev={arabicName:s.arabicName||'',englishName:s.englishName||'',phase:s.phase||'',priority:s.priority||'',status:s.status||''};
   const noChange=prev.arabicName===arabicName&&prev.englishName===englishName&&prev.phase===phase&&prev.priority===priority&&prev.status===status;
   if(noChange){closeFeatureEditModal();return;}
+  const btn=document.getElementById('featureEditSaveBtn');if(btn)btn.disabled=true;
+  showSaveIndicator('saving');
   const apply=()=>{s.arabicName=arabicName;s.englishName=englishName;s.phase=phase;s.priority=priority;s.status=status;s.isHidden=(status==='Not Used');const n=today();s.lastUpdatedDate=n.date;s.lastUpdatedTime=n.time;DATA.mains.forEach(m=>recomputeMain(m));};
-  const refreshAfterLocal=()=>{
-    const snap=captureViewport(id);
-    closeFeatureEditModal();
-    buildFilters();
-    const updatedInPlace=paintFeatureRowOnly(id);
-    if(!updatedInPlace){
-      paintFeatures();
-    }
-    renderMainDashboard(false);
-    renderDashboard(false);
-    restoreViewport(snap,{mark:true});
-    setTimeout(()=>restoreViewport(snap,{mark:true}),90);
-  };
+  const restore=()=>{s.arabicName=prev.arabicName;s.englishName=prev.englishName;s.phase=prev.phase;s.priority=prev.priority;s.status=prev.status;s.isHidden=(prev.status==='Not Used');DATA.mains.forEach(m=>recomputeMain(m));};
+  const refreshAfterLocal=()=>{if(btn)btn.disabled=false;closeFeatureEditModal();const row=document.getElementById('sub-'+cssId(id));if(row){const txt=row.querySelector('.sub-name-text');if(txt)txt.textContent=nameOf(s);const inp=row.querySelector('.sub-name-input');if(inp)inp.value=nameOf(s);paintRowMeta(s,'phase',false);paintRowMeta(s,'priority',false);paintRowStatus(s,false);setRowUpdatedLabel(s);markRowEdited(row);}updateParentCard(BY_ID[s.mainFeatureId||s.parentFeatureId]);renderMainDashboard(false);renderDashboard(false);};
 
-  // Fast save: update the same row immediately, then save the latest version in the background.
-  apply();
-  refreshAfterLocal();
+  // Fast optimistic save: update the screen immediately, then sync to Google Sheet.
+  apply();refreshAfterLocal();showSaveIndicator('saved');toast(tr('saved'),'note');
   if(mode==='online'){
-    queueFeatureDetailSave(id, prev);
+    apiPost({action:'updateFeatureDetails',featureId:id,arabicName,englishName,phase,priority,status})
+      .then(r=>{if(!r||!(r.ok||r.success||r.saved))throw new Error((r&&r.error)||'Update failed');})
+      .catch(()=>{restore();const row=document.getElementById('sub-'+cssId(id));if(row){const txt=row.querySelector('.sub-name-text');if(txt)txt.textContent=nameOf(s);const inp=row.querySelector('.sub-name-input');if(inp)inp.value=nameOf(s);paintRowMeta(s,'phase',false);paintRowMeta(s,'priority',false);paintRowStatus(s,false);}renderMainDashboard(false);renderDashboard(false);showSaveIndicator('failed');toast(tr('saveFailed'),'error');});
   }else{
-    showSaveIndicator('saved');toast(tr('saved'),'note');
     const n=today();
     DATA.activity.unshift({id:'A'+String(DATA.activity.length+1).padStart(4,'0'),fid:id,type:'Feature Details Change',oldStatus:prev.status,newStatus:status,date:n.date,time:n.time});
     persistOffline();
   }
-}
-
-
-
-/* ---------- fast background save queue for feature text/meta edits ----------
-   Allows multiple edits in a row. The UI updates immediately, then the latest
-   version of each edited feature is saved once after the user pauses briefly. */
-const pendingDetailSaves = {};
-let detailSaveTimer = null;
-function queueFeatureDetailSave(featureId, snapshotBefore){
-  const s = BY_ID[featureId];
-  if(!s) return;
-  pendingDetailSaves[featureId] = {
-    before: pendingDetailSaves[featureId]?.before || snapshotBefore || null,
-    payload: {
-      action:'updateFeatureDetails',
-      featureId: featureId,
-      arabicName: s.arabicName || '',
-      englishName: s.englishName || '',
-      phase: s.phase || '',
-      priority: s.priority || '',
-      status: s.status || '',
-      statusChanged: !!(snapshotBefore && snapshotBefore.status !== (s.status || ''))
-    }
-  };
-  showSaveIndicator('saving');
-  clearTimeout(detailSaveTimer);
-  detailSaveTimer = setTimeout(flushFeatureDetailSaves, 900);
-}
-function flushFeatureDetailSaves(){
-  detailSaveTimer = null;
-  const entries = Object.entries(pendingDetailSaves);
-  if(!entries.length) return;
-  entries.forEach(([id])=>delete pendingDetailSaves[id]);
-  if(mode!=='online'){
-    const n=today();
-    entries.forEach(([id])=>{const f=BY_ID[id]; if(f){f.lastUpdatedDate=n.date; f.lastUpdatedTime=n.time; setRowUpdatedLabel(f);}});
-    persistOffline();
-    showSaveIndicator('saved');
-    return;
-  }
-  const updates=entries.map(([id,item])=>({id,item,payload:{...item.payload,action:undefined}}));
-  const applyResults=(results)=>{
-    const failed = results.filter(x=>!x.ok);
-    results.filter(x=>x.ok).forEach(x=>{
-      const f=BY_ID[x.id]; if(!f) return;
-      if(x.res&&x.res.lastUpdatedDate) f.lastUpdatedDate=x.res.lastUpdatedDate;
-      if(x.res&&x.res.lastUpdatedTime) f.lastUpdatedTime=x.res.lastUpdatedTime;
-      setRowUpdatedLabel(f);
-    });
-    if(failed.length){
-      console.error('Some detail saves failed', failed);
-      showSaveIndicator('failed');
-      toast(tr('saveFailed'),'error');
-    }else{
-      showSaveIndicator('saved');
-      toast(tr('saved'),'note');
-    }
-  };
-  apiPost({action:'batchUpdateFeatureDetails',updates:updates.map(x=>x.payload)})
-    .then(r=>{
-      if(!r||!r.ok)throw new Error((r&&r.error)||'batch failed');
-      const byId={};(r.results||[]).forEach(x=>{byId[x.featureId]=x;});
-      applyResults(updates.map(x=>({id:x.id,item:x.item,ok:!!(byId[x.id]&&byId[x.id].ok),res:byId[x.id]||r})));
-    })
-    .catch(()=>Promise.all(entries.map(([id,item])=>
-      apiPost(item.payload)
-        .then(r=>({id,item,ok:!!(r&&(r.ok||r.success||r.saved)),res:r}))
-        .catch(err=>({id,item,ok:false,err}))
-    )).then(applyResults));
 }
 
 function groupedSubSections(list){const groups=[];const map={};list.forEach(s=>{const key=s.sectionId||s.subSection||'__none';if(!map[key]){map[key]={id:key,en:s.subSection||'',ar:s.subSectionAr||'',items:[]};groups.push(map[key]);}map[key].items.push(s);});return groups;}
@@ -2666,16 +2551,21 @@ function updateSubName(subId,value){
   const field=(lang==='ar')?'arabicName':'englishName';
   const prev=s[field]||'';
   value=String(value||'').trim();
-  if(!value){paintFeatures();return;}
+  const row=document.getElementById('sub-'+cssId(subId));
+  if(!value){if(row){const inp=row.querySelector('.sub-name-input');if(inp)inp.value=prev;}return;}
   if(prev===value)return;
   s[field]=value;
-  const row=document.getElementById('sub-'+cssId(subId));
+  if(row){
+    const txt=row.querySelector('.sub-name-text');if(txt)txt.textContent=nameOf(s);
+    const inp=row.querySelector('.sub-name-input');if(inp)inp.value=nameOf(s);
+  }
   markRowEdited(row);showSaveIndicator('saving');
-  const rollback=()=>{s[field]=prev;withViewportLock(subId,()=>paintFeatures(),{mark:true});showSaveIndicator('failed');};
-  const done=()=>{const n=today();s.lastUpdatedDate=n.date;s.lastUpdatedTime=n.time;paintFeatureRowOnly(subId);showSaveIndicator('saved');toast(tr('saved'),'note');};
+  const rollback=()=>{s[field]=prev;if(row){const txt=row.querySelector('.sub-name-text');if(txt)txt.textContent=nameOf(s);const inp=row.querySelector('.sub-name-input');if(inp)inp.value=nameOf(s);}showSaveIndicator('failed');toast(tr('saveFailed'),'error');};
+  const done=()=>{const n=today();s.lastUpdatedDate=n.date;s.lastUpdatedTime=n.time;setRowUpdatedLabel(s);showSaveIndicator('saved');toast(tr('saved'),'note');};
   if(mode==='online'){
-    done();
-    queueFeatureDetailSave(subId, {...s,[field]:prev});
+    apiPost({action:'updateFeatureMeta',featureId:subId,field:field,value:value})
+      .then(done)
+      .catch(rollback);
   }else{
     const n=today();DATA.activity.unshift({id:'A'+String(DATA.activity.length+1).padStart(4,'0'),fid:subId,type:'Name Change',oldStatus:prev,newStatus:value,date:n.date,time:n.time});persistOffline();done();
   }
@@ -2696,8 +2586,9 @@ function updateSubMeta(subId,field,value){
   const rollback=()=>{s[field]=prev;paintRowMeta(s,field,false);showSaveIndicator('failed');};
   const done=()=>{const n=today();s.lastUpdatedDate=n.date;s.lastUpdatedTime=n.time;setRowUpdatedLabel(s);paintRowMeta(s,field,false);showSaveIndicator('saved');toast(tr('saved'),'note');if(parent)updateParentCard(parent);buildFilters();};
   if(mode==='online'){
-    done();
-    queueFeatureDetailSave(subId, {...s,[field]:prev});
+    apiPost({action:'updateFeatureMeta',featureId:subId,field:field,value:value||''})
+      .then(r=>{if(!r||!(r.ok||r.success||r.saved))throw new Error((r&&r.error)||'Update failed');done();})
+      .catch(rollback);
   }else{
     const n=today();DATA.activity.unshift({id:'A'+String(DATA.activity.length+1).padStart(4,'0'),fid:subId,type:action,oldStatus:prev,newStatus:value||'',date:n.date,time:n.time});
     persistOffline();done();
@@ -2716,25 +2607,19 @@ function flushStatusSaves(){
 
   if(mode==='online'){
     showSaveIndicator('saving');
-    const finish=(results)=>{
+    // apiPost is already queued; this batch is sent sequentially to prevent LockService collisions.
+    Promise.all(batch.map(c=>
+      apiPost({action:'updateFeatureStatus',featureId:c.id,newStatus:c.next})
+        .then(()=>({c,ok:true}))
+        .catch((e)=>({c,ok:false,error:e}))
+    )).then(results=>{
       const failed=results.filter(r=>!r.ok).map(r=>r.c);
       reenable();
       if(failed.length){
         failed.forEach(c=>{const s=BY_ID[c.id];if(s){s.status=c.prev;s.isHidden=(c.prev==='Not Used');paintRowStatus(s,false);updateParentCard(BY_ID[c.parentId]);}});
-        showSaveIndicator('failed');
+        showSaveIndicator('failed');toast(tr('saveFailed'),'error');
       }else{stamp();showSaveIndicator('saved');toast(tr('saved'),'note');}
-    };
-    apiPost({action:'batchUpdateFeatureStatuses',updates:batch.map(c=>({featureId:c.id,newStatus:c.next}))})
-      .then(r=>{
-        if(!r||!r.ok)throw new Error((r&&r.error)||'batch failed');
-        const byId={};(r.results||[]).forEach(x=>{byId[x.featureId]=x;});
-        finish(batch.map(c=>({c,ok:!!(byId[c.id]&&byId[c.id].ok)})));
-      })
-      .catch(()=>Promise.all(batch.map(c=>
-        apiPost({action:'updateFeatureStatus',featureId:c.id,newStatus:c.next})
-          .then(r=>{if(!r||!(r.ok||r.success||r.saved))throw new Error((r&&r.error)||'Update failed');return{c,ok:true};})
-          .catch(()=>({c,ok:false}))
-      )).then(finish));
+    });
     return;
   }
 
@@ -2787,22 +2672,32 @@ function renderNotesPanel(){const o=BY_ID[currentFeatureId];if(!o)return;const p
   document.getElementById('noteFeatureMini').innerHTML=`<div class="id">${escapeHtml(o.featureId)}${parent?' · '+escapeHtml(nameOf(parent)):''}${o.phase?' · '+phaseLabel(o.phase):''}</div><div class="name">${escapeHtml(nameOf(o))}</div>`;
   const list=notesFor(currentFeatureId);document.getElementById('historyTitle').textContent=`${tr('notesHistory')} (${list.length})`;
   document.getElementById('notesHistory').innerHTML=list.length?`<div class="timeline">`+list.map((nt,i)=>{const init=(nt.source==='Initial Review');
-    return `<div class="tl-item" style="animation-delay:${Math.min(i,15)*40}ms"><div class="tl-node ${init?'imp':'note'}">${svg(init?'import':'note')}</div>
+    return `<div class="tl-item ${nt.pending?'pending':''}" style="animation-delay:${Math.min(i,15)*40}ms"><div class="tl-node ${init?'imp':'note'}">${svg(init?'import':'note')}</div>
      <div class="tl-card"><div class="tl-time">${svg('calendar','icon-sm')}${nt.date?escapeHtml(String(nt.date))+(nt.time?' · '+escapeHtml(String(nt.time)):''):''}<span class="src-badge ${init?'imp':''}">${init?tr('initialReview'):tr('userNote')}</span></div>
      <div class="tl-text">${escapeHtml(nt.note)}</div></div></div>`;}).join('')+`</div>`:`<div class="no-notes">${tr('noNotes')}</div>`;}
-function saveNote(){if(!requireAdmin())return;const t=document.getElementById('noteText').value.trim();if(!t||!currentFeatureId){toast(tr('errorEmpty'),'error');return;}
-  if(mode==='online'){toast(tr('syncing'));
-    apiPost({action:'saveNote',featureId:currentFeatureId,note:t,source:'User Note'})
-      .then(r=>{if(!r||!(r.ok||r.success||r.saved))throw 0;document.getElementById('noteText').value='';return Promise.all([apiGet('getNotes',{featureId:currentFeatureId}),apiGet('getActivityLog')]);})
-      .then(([nr,ar])=>{if(nr&&nr.notes)DATA.notes[currentFeatureId]=nr.notes.map(n=>({noteId:n.noteId,featureId:currentFeatureId,date:n.date,time:n.time,source:n.source||'User Note',note:n.note||''}));
-        if(ar&&ar.activity)DATA.activity=ar.activity.map(x=>({id:x.activityId,fid:x.featureId,type:x.activityType,oldStatus:x.oldStatus,newStatus:x.newStatus,date:x.date,time:x.time}));
-        renderNotesPanel();renderActivity();updateNoteCount(currentFeatureId);toast(tr('noteSaved'),'note');})
-      .catch(()=>toast(lang==='ar'?'تعذّر حفظ الملاحظة':'Save failed','error'));
-    return;}
-  const n=today();userNotes[currentFeatureId]=userNotes[currentFeatureId]||[];
-  userNotes[currentFeatureId].unshift({noteId:'U'+Date.now(),featureId:currentFeatureId,date:n.date,time:n.time,source:'User Note',note:t});
-  DATA.activity.unshift({id:'A'+String(DATA.activity.length+1).padStart(4,'0'),fid:currentFeatureId,type:'Note Added',note:t,date:n.date,time:n.time});
-  persistOffline();document.getElementById('noteText').value='';renderNotesPanel();renderActivity();updateNoteCount(currentFeatureId);toast(tr('noteSaved'),'note');}
+function saveNote(){
+  if(!requireAdmin())return;
+  const box=document.getElementById('noteText');
+  const t=String(box.value||'').trim();
+  const fid=currentFeatureId;
+  if(!t||!fid){toast(tr('errorEmpty'),'error');return;}
+  const n=today();
+  const localNote={noteId:'P'+Date.now(),featureId:fid,date:n.date,time:n.time,source:'User Note',note:t,pending:true};
+  DATA.notes[fid]=DATA.notes[fid]||[];
+  DATA.notes[fid].unshift(localNote);
+  DATA.activity.unshift({id:'A'+String(DATA.activity.length+1).padStart(4,'0'),fid:fid,type:'Note Added',note:t,date:n.date,time:n.time});
+  box.value='';
+  renderNotesPanel();renderActivity();updateNoteCount(fid);showSaveIndicator('saving');toast(tr('syncing'),'note');
+  if(mode==='online'){
+    apiPost({action:'saveNote',featureId:fid,note:t,source:'User Note'})
+      .then(r=>{localNote.pending=false;if(r&&r.noteId)localNote.noteId=r.noteId;showSaveIndicator('saved');if(currentFeatureId===fid)renderNotesPanel();toast(tr('noteSaved'),'note');})
+      .catch(()=>{showSaveIndicator('failed');localNote.pending=true;if(currentFeatureId===fid)renderNotesPanel();toast(lang==='ar'?'تم حفظ الملاحظة في الشاشة، لكن تعذّرت مزامنتها مع الشيت. أعيدي المحاولة بعد تحديث الصفحة.':'Note kept on screen, but Sheet sync failed. Please retry after refreshing.','error');});
+    return;
+  }
+  userNotes[fid]=userNotes[fid]||[];
+  userNotes[fid].unshift(localNote);
+  persistOffline();showSaveIndicator('saved');toast(tr('noteSaved'),'note');
+}
 
 /* ====================================================================
    ACTIVITY LOG  (only real records; no demo data)
