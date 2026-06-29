@@ -1871,7 +1871,22 @@ const USE_SHEET=!!SHEET_API_URL;
 function apiGet(action,params){const u=new URL(SHEET_API_URL);u.searchParams.set('action',action);if(params)Object.entries(params).forEach(([k,v])=>u.searchParams.set(k,v));return fetch(u.toString()).then(r=>r.json());}
 function apiPost(payload){
   const pass=localStorage.getItem(ADMIN_PASS_KEY)||'';
-  return fetch(SHEET_API_URL,{method:'POST',body:JSON.stringify({...payload,adminPassword:pass})}).then(r=>r.json());
+  // No custom headers on purpose: keeps this a CORS "simple request" so the body
+  // is delivered to Apps Script as e.postData.contents. redirect:'follow' lets the
+  // 302 to script.googleusercontent.com complete normally.
+  return fetch(SHEET_API_URL,{method:'POST',redirect:'follow',body:JSON.stringify({...payload,adminPassword:pass})})
+    .then(r=>r.text())
+    .then(t=>{
+      try{return JSON.parse(t);}
+      catch(e){
+        const looksHtml=/^\s*</.test(String(t||''));
+        throw new Error(looksHtml
+          ?(lang==='ar'
+              ?'استجابة غير متوقعة من الخادم (يبدو أنها صفحة تسجيل دخول). تأكدي أن نشر تطبيق الويب في Apps Script مضبوط على: Who has access = Anyone.'
+              :'Unexpected server response (looks like a login page). Set the Apps Script Web App access to "Anyone".')
+          :(lang==='ar'?'تعذّر قراءة استجابة الخادم.':'Could not parse server response.'));
+      }
+    });
 }
 function normalizeActivityList(activity){
   return (activity||[]).map(x=>({id:x.activityId||x.id||'',fid:x.featureId||x.fid||'',type:x.activityType||x.type||'',oldStatus:x.oldStatus||x.oldValue||'',newStatus:x.newStatus||x.newValue||'',date:x.date||'',time:x.time||'',note:x.note||''}));
@@ -2369,6 +2384,8 @@ function saveFeatureDetails(){
   const prev={arabicName:s.arabicName||'',englishName:s.englishName||'',phase:s.phase||'',priority:s.priority||'',status:s.status||''};
   const noChange=prev.arabicName===arabicName&&prev.englishName===englishName&&prev.phase===phase&&prev.priority===priority&&prev.status===status;
   if(noChange){closeFeatureEditModal();return;}
+  const __anchorEl=document.getElementById('sub-'+cssId(id));
+  const anchorTop=__anchorEl?__anchorEl.getBoundingClientRect().top:null;
   const btn=document.getElementById('featureEditSaveBtn');if(btn)btn.disabled=true;
   const keepScroll=window.scrollY;
   showSaveIndicator('saving');
@@ -2381,15 +2398,15 @@ function saveFeatureDetails(){
     const inp=row.querySelector('.sub-name-input');if(inp)inp.value=nameOf(s);
     paintRowMeta(s,null,false);paintRowStatus(s,false);setRowUpdatedLabel(s);markRowEdited(row);
   }
-  renderMainDashboard(false);renderDashboard(false);setTimeout(()=>window.scrollTo({top:keepScroll,left:0,behavior:'auto'}),0);
+  renderMainDashboard(false);renderDashboard(false);keepRowAnchored(id,anchorTop);
   const finish=()=>{if(btn)btn.disabled=false;showSaveIndicator('saved');toast(tr('saved'),'note');};
-  const fail=(err)=>{restore();if(btn)btn.disabled=false;paintFeatures();setTimeout(()=>window.scrollTo({top:keepScroll,left:0,behavior:'auto'}),0);showSaveIndicator('failed');toast((tr('saveFailed'))+(err?': '+err:''),'error');};
+  const fail=(err)=>{restore();if(btn)btn.disabled=false;paintFeatures();keepRowAnchored(id,anchorTop);showSaveIndicator('failed');toast((tr('saveFailed'))+(err?': '+err:''),'error');};
   if(mode==='online'){
     serverSave({type:'details',featureId:id,arabicName,englishName,phase,priority,status})
-      .then(r=>{const res=(r.results||[])[0]||{};if(res.lastUpdatedDate){s.lastUpdatedDate=res.lastUpdatedDate;s.lastUpdatedTime=res.lastUpdatedTime;setRowUpdatedLabel(s);}finish();})
+      .then(r=>{const res=(r.results||[])[0]||{};if(res.lastUpdatedDate){s.lastUpdatedDate=res.lastUpdatedDate;s.lastUpdatedTime=res.lastUpdatedTime;setRowUpdatedLabel(s);}finish();keepRowAnchored(id,anchorTop);})
       .catch(e=>fail(e&&e.message));
   }else{
-    const n=today();DATA.activity.unshift({id:'A'+String(DATA.activity.length+1).padStart(4,'0'),fid:id,type:'Feature Details Change',oldStatus:prev.status,newStatus:status,date:n.date,time:n.time});persistOffline();finish();
+    const n=today();DATA.activity.unshift({id:'A'+String(DATA.activity.length+1).padStart(4,'0'),fid:id,type:'Feature Details Change',oldStatus:prev.status,newStatus:status,date:n.date,time:n.time});persistOffline();finish();keepRowAnchored(id,anchorTop);
   }
 }
 
@@ -2415,6 +2432,25 @@ function scrollMainToStart(card){
   const offset=(topbar?topbar.getBoundingClientRect().height:0)+14;
   const y=window.scrollY+card.getBoundingClientRect().top-offset;
   window.scrollTo({top:Math.max(0,y),behavior:'smooth'});
+}
+/* Keep the user exactly where they were after editing a feature.
+   anchorTop = the row's viewport position captured BEFORE the save.
+   After the DOM settles we nudge the page so the same row sits at the same
+   spot — no jump to the top, even if row heights changed. */
+function keepRowAnchored(id,anchorTop){
+  if(!id)return;
+  requestAnimationFrame(()=>{setTimeout(()=>{
+    const row=document.getElementById('sub-'+cssId(id));
+    if(!row)return;
+    if(anchorTop!=null&&isFinite(anchorTop)){
+      const delta=row.getBoundingClientRect().top-anchorTop;
+      if(Math.abs(delta)>1)window.scrollBy({top:delta,left:0,behavior:'auto'});
+    }else{
+      row.scrollIntoView({behavior:'auto',block:'center'});
+    }
+    row.classList.remove('edited');void row.offsetWidth;row.classList.add('edited');
+    setTimeout(()=>row.classList.remove('edited'),1600);
+  },30);});
 }
 function toggleMain(id){const card=document.getElementById('main-'+cssId(id));if(!card)return;const body=card.querySelector('.exec-body');
   if(openMainId===id){openMainId=null;collapse(card,body);return;}
@@ -2558,13 +2594,15 @@ function updateSubMeta(subId,field,value){
   const s=BY_ID[subId];if(!s)return;
   const prev=s[field]||'';if(prev===(value||''))return;
   const parent=BY_ID[s.mainFeatureId||s.parentFeatureId];
+  const __anchorEl=document.getElementById('sub-'+cssId(subId));
+  const anchorTop=__anchorEl?__anchorEl.getBoundingClientRect().top:null;
   s[field]=value||'';
   paintRowMeta(s,field,true);
   const row=document.getElementById('sub-'+cssId(subId));markRowEdited(row);
   showSaveIndicator('saving');
   const action=field==='phase'?'Phase Change':'Priority Change';
   const rollback=(err)=>{s[field]=prev;paintRowMeta(s,field,false);showSaveIndicator('failed');toast((tr('saveFailed'))+(err?': '+err:''),'error');};
-  const done=(res)=>{const n=res||today();s.lastUpdatedDate=n.lastUpdatedDate||n.date;s.lastUpdatedTime=n.lastUpdatedTime||n.time;setRowUpdatedLabel(s);paintRowMeta(s,field,false);showSaveIndicator('saved');toast(tr('saved'),'note');if(parent)updateParentCard(parent);buildFilters();};
+  const done=(res)=>{const n=res||today();s.lastUpdatedDate=n.lastUpdatedDate||n.date;s.lastUpdatedTime=n.lastUpdatedTime||n.time;setRowUpdatedLabel(s);paintRowMeta(s,field,false);showSaveIndicator('saved');toast(tr('saved'),'note');if(parent)updateParentCard(parent);buildFilters();keepRowAnchored(subId,anchorTop);};
   if(mode==='online'){
     serverSave({type:'meta',featureId:subId,field:field,value:value||''})
       .then(r=>done((r.results||[])[0]||r))
@@ -2616,6 +2654,8 @@ function updateSubStatus(subId,newStatus){
   const s=BY_ID[subId];
   if(!s||s.status===newStatus)return;
   const parent=BY_ID[s.mainFeatureId||s.parentFeatureId];
+  const __anchorEl=document.getElementById('sub-'+cssId(subId));
+  const anchorTop=__anchorEl?__anchorEl.getBoundingClientRect().top:null;
 
   // keep original prev (before any unsaved edit in this burst) for correct rollback
   const prev=(pendingChanges[subId]?pendingChanges[subId].prev:s.status);
@@ -2628,6 +2668,7 @@ function updateSubStatus(subId,newStatus){
   if(row){const sel=row.querySelector('.status-select');if(sel){sel.classList.add('flash');setTimeout(()=>sel.classList.remove('flash'),340);}}
   markRowEdited(row);
   updateParentCard(parent);
+  keepRowAnchored(subId,anchorTop);
 
   // queue + debounce
   pendingChanges[subId]={prev,next:newStatus,parentId:parent?parent.featureId:null};
@@ -2705,6 +2746,118 @@ function activityTimeline(list){return `<div class="timeline">`+list.map((a,i)=>
   return `<div class="tl-item" style="animation-delay:${Math.min(i,12)*45}ms"><div class="tl-node ${isStatus?'':'note'}">${svg(nodeIcon)}</div>
     <div class="tl-card"><div class="tl-time">${svg('calendar','icon-sm')}<span dir="ltr">${escapeHtml(activityDateTime(a))}</span> · ${escapeHtml(activityLabel(a.type))}</div>
     <div class="tl-title">${escapeHtml(nameOf(f))} <span class="fc-id">${escapeHtml(a.fid)}</span></div><div class="tl-desc">${desc}</div></div></div>`;}).join('')+`</div>`;}
+/* ====================================================================
+   CORE UI UTILITIES — (restored)
+   These were also referenced everywhere but their definitions were absent
+   in this file version, causing ReferenceErrors:
+     • toast()  — referenced ~49× (every save/edit feedback message)
+     • normDigits() — used by the activity time cleaner
+     • command palette: openCmd/closeCmd/cmdOutside/renderCmd/cmdMove/cmdSelect
+   All matching CSS (.toast, .cmd-item, #cmdOverlay …) and DOM containers
+   (#toasts, #cmdResults …) already exist in this file, so these are rebuilt
+   to fit the existing markup without changing the UI.
+   ==================================================================== */
+function normDigits(s){
+  return String(s==null?'':s)
+    .replace(/[\u0660-\u0669]/g,d=>String(d.charCodeAt(0)-0x0660))   // Arabic-Indic
+    .replace(/[\u06F0-\u06F9]/g,d=>String(d.charCodeAt(0)-0x06F0));  // Extended Arabic-Indic
+}
+function toast(msg,kind){
+  const wrap=document.getElementById('toasts');if(!wrap)return;
+  kind=kind||'note';
+  const icon={error:'alert',check:'check',pdf:'import',note:'note'}[kind]||'note';
+  const accent={error:'#E5484D',check:'var(--success)',pdf:'var(--primary)',note:'var(--primary)'}[kind]||'var(--primary)';
+  const el=document.createElement('div');
+  el.className='toast';
+  el.innerHTML=`<span class="tic" style="background:${accent}">${svg(icon,'icon-sm')}</span><span>${escapeHtml(String(msg==null?'':msg))}</span>`;
+  wrap.appendChild(el);
+  setTimeout(()=>{el.classList.add('out');setTimeout(()=>el.remove(),360);},2600);
+}
+function buildCmdItems(q){
+  const ql=normDigits(String(q||'')).toLowerCase().trim();
+  const items=[];
+  const cats=[...new Set((DATA.mains||[]).map(m=>m.category).filter(Boolean))];
+  cats.forEach(c=>{const ar=CAT_AR_RT[c]||'';
+    if(!ql||c.toLowerCase().includes(ql)||ar.toLowerCase().includes(ql))
+      items.push({icon:'folder',title:(lang==='ar'&&ar)?ar:c,sub:lang==='ar'?'تصنيف':'Category',act:()=>selectCategory(c)});});
+  (DATA.mains||[]).forEach(m=>{
+    const mn=nameOf(m);
+    if(!ql||mn.toLowerCase().includes(ql))
+      items.push({icon:'layers',title:mn,sub:lang==='ar'?'خاصية رئيسية':'Main Feature',
+        act:()=>{selectCategory(m.category);openMainId=m.featureId;setTimeout(paintFeatures,40);}});
+    if(ql)(m.subFeatures||[]).forEach(s=>{const sn=nameOf(s);
+      if(sn.toLowerCase().includes(ql))
+        items.push({icon:'tracker',title:sn,sub:lang==='ar'?'خاصية فرعية':'Sub Feature',
+          act:()=>{selectCategory(m.category);openMainId=m.featureId;setTimeout(()=>{paintFeatures();const row=document.getElementById('sub-'+cssId(s.featureId));if(row)row.scrollIntoView({behavior:'smooth',block:'center'});},80);}});});
+  });
+  return items.slice(0,40);
+}
+function renderCmd(){
+  const box=document.getElementById('cmdResults');if(!box)return;
+  const q=(document.getElementById('cmdInput')||{}).value||'';
+  cmdItems=buildCmdItems(q);cmdIndex=0;
+  if(!cmdItems.length){box.innerHTML=`<div style="padding:18px;text-align:center;color:var(--muted);font-size:12px">${lang==='ar'?'لا توجد نتائج':'No results'}</div>`;return;}
+  box.innerHTML=cmdItems.map((it,i)=>`<div class="cmd-item${i===cmdIndex?' active':''}" data-i="${i}" onclick="cmdSelect(${i})"><span class="cmd-ic">${svg(it.icon,'icon-sm')}</span><span class="cmd-label">${escapeHtml(it.title)}</span><span style="margin-${lang==='ar'?'right':'left'}:auto;font-size:10px;color:var(--muted)">${escapeHtml(it.sub)}</span></div>`).join('');
+}
+function cmdHighlight(){
+  const box=document.getElementById('cmdResults');if(!box)return;
+  box.querySelectorAll('.cmd-item').forEach((el,i)=>el.classList.toggle('active',i===cmdIndex));
+  const act=box.querySelector('.cmd-item.active');if(act)act.scrollIntoView({block:'nearest'});
+}
+function cmdMove(d){if(!cmdItems.length)return;cmdIndex=(cmdIndex+d+cmdItems.length)%cmdItems.length;cmdHighlight();}
+function cmdSelect(i){const it=cmdItems[i];if(!it)return;closeCmd();try{it.act&&it.act();}catch(e){}}
+function openCmd(){const ov=document.getElementById('cmdOverlay');if(!ov)return;ov.classList.add('open');const inp=document.getElementById('cmdInput');if(inp){inp.value='';setTimeout(()=>inp.focus(),60);}renderCmd();}
+function closeCmd(){const ov=document.getElementById('cmdOverlay');if(ov)ov.classList.remove('open');}
+function cmdOutside(e){if(e.target.id==='cmdOverlay')closeCmd();}
+
+/* ====================================================================
+   ACTIVITY RENDERING — (restored)
+   These three functions were referenced throughout the app but their
+   definitions were missing, which caused a ReferenceError every time
+   the Activity Log was rendered or refreshed. Because applyServerActivity()
+   calls renderActivity() *inside* a successful serverSave().then(), the
+   missing function made the save promise REJECT after the server had
+   already written to Google Sheet — so changes were saved to the sheet
+   yet the UI rolled them back and showed "Save failed".
+   ==================================================================== */
+function isoDatePart(v){
+  const s=String(v==null?'':v).trim();
+  let m=s.match(/(\d{4})-(\d{2})-(\d{2})/);                 // YYYY-MM-DD
+  if(m)return m[1]+'-'+m[2]+'-'+m[3];
+  m=s.match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})/);      // DD/MM/YYYY or D-M-YYYY
+  if(m)return m[3]+'-'+String(m[2]).padStart(2,'0')+'-'+String(m[1]).padStart(2,'0');
+  return s;
+}
+function formatActivityDate(v){
+  const iso=isoDatePart(v);
+  const m=iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m?`${m[3]}/${m[2]}/${m[1]}`:String(v==null?'':v);   // display as DD/MM/YYYY
+}
+function renderActivity(){
+  const host=document.getElementById('activityList');
+  if(!host)return;
+  if(mode==='setup'||mode==='error'){host.innerHTML=stateBlock(mode);return;}
+  const all=Array.isArray(DATA.activity)?DATA.activity:[];
+  const filterEl=document.getElementById('activityDate');
+  const filter=filterEl&&filterEl.value?filterEl.value:'';   // native value is YYYY-MM-DD
+  const list=filter?all.filter(a=>isoDatePart(a.date)===filter):all;
+  if(!list.length){
+    const t=filter?tr('noActivityDate'):tr('noActivity');
+    const sub=filter?tr('noActivityDateSub'):tr('noActivitySub');
+    host.innerHTML=`<div class="state-block"><div class="state-ic">${svg('activity')}</div><h3>${escapeHtml(t)}</h3><p>${escapeHtml(sub)}</p></div>`;
+    return;
+  }
+  host.innerHTML=activityTimeline(list);
+}
+function refreshActivity(){
+  if(mode==='online'&&USE_SHEET){
+    return apiGet('getActivityLog')
+      .then(a=>{if(a&&Array.isArray(a.activity))DATA.activity=normalizeActivityList(a.activity);renderActivity();})
+      .catch(()=>{renderActivity();});
+  }
+  renderActivity();
+  return Promise.resolve();
+}
 function clearFilters(){
   const q=document.getElementById('searchInput');if(q)q.value='';
   ['phaseFilter','priorityFilter','statusFilter'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='All';});
