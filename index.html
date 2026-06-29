@@ -3255,4 +3255,249 @@ function amUpdatePath(){
 /* ---------- SUBMIT (batch add) ---------- */
 function submitAddMain(){
   if(!requireAdmin())return;
-  const
+  const cat=resolveCategory(amCurrentCat());
+  if(!cat){toast(amT('Ø§ÙØ±Ø¬Ø§Ø¡ ØªØ­Ø¯ÙØ¯ Ø§ÙØªØµÙÙÙ','Please choose a category'),'error');return;}
+  const catAr=amCurrentCatAr();if(catAr)CAT_AR_RT[cat]=catAr;
+  const mainName=amCurrentMain();
+  if(!mainName){toast(amT('Ø§ÙØ±Ø¬Ø§Ø¡ ØªØ­Ø¯ÙØ¯ Ø§ÙØ®Ø§ØµÙØ© Ø§ÙØ±Ø¦ÙØ³ÙØ©','Please choose a main feature'),'error');return;}
+  const mainNameAr=amCurrentMainAr();
+  // Collect rows from every group (bilingual)
+  const rows=[];
+  document.querySelectorAll('#amGroups .am-group').forEach(g=>{
+    const gid=g.dataset.gid,ss=amGroupSubsec(gid);
+    g.querySelectorAll('.am-detail-row').forEach(r=>{
+      const tAr=(r.querySelector('.am-d-sub').value||'').trim();
+      const enEl=r.querySelector('.am-d-sub-en');const tEn=(enEl&&enEl.value||'').trim();
+      if(!tAr&&!tEn)return;
+      rows.push({textAr:tAr||tEn,textEn:tEn||tAr,ss:{en:ss.en||'',ar:ss.ar||ss.en||''},
+        phase:(r.querySelector('.am-d-phase').value||'').trim(),
+        priority:(r.querySelector('.am-d-priority').value||'').trim(),
+        status:(r.querySelector('.am-d-status').value||'Not Verified').trim()});
+    });
+  });
+  if(!rows.length){toast(amT('Ø£Ø¶ÙÙÙ ØªÙØµÙÙØ§Ù ÙØ§Ø­Ø¯ÙØ§ Ø¹ÙÙ Ø§ÙØ£ÙÙ','Add at least one detail'),'error');return;}
+  amApplyRows(cat,mainName,mainNameAr,rows);
+}
+
+function amApplyRows(cat,mainName,mainNameAr,rows){
+  const n=today();
+  const existing=findMainByName(cat,mainName);
+  if(existing){
+    const subs=existing.subFeatures||(existing.subFeatures=[]);
+    const dno=String(existing.displayNo||(DATA.mains.indexOf(existing)+1));
+    const firstPriority=rows[0].priority||(subs[0]&&subs[0].priority)||'Priority 1';
+    const secByKey={};let maxSec=0;
+    subs.forEach(s=>{const skey=(s.subSection||'')+'||'+(s.subSectionAr||'');
+      const sd=String(s.sectionDisplayNo||'');const dot=sd.lastIndexOf('.');const no=dot>=0?(parseInt(sd.slice(dot+1))||0):0;
+      if(!secByKey[skey])secByKey[skey]={no:no,id:s.sectionId||(existing.featureId+'.S'+(no||1)),seq:0};
+      secByKey[skey].seq++;if(no>maxSec)maxSec=no;});
+    const newSubs=rows.map(d=>{
+      const skey=(d.ss.en||'')+'||'+(d.ss.ar||'');
+      if(!secByKey[skey]){maxSec++;secByKey[skey]={no:maxSec,id:existing.featureId+'.S'+maxSec,seq:0};}
+      const sec=secByKey[skey];sec.seq++;
+      const sub={featureId:genSubId(existing.featureId),displayNo:dno+'.'+sec.no+'-'+String(sec.seq).padStart(2,'0'),sectionDisplayNo:dno+'.'+sec.no,parentFeatureId:existing.featureId,mainFeatureId:existing.featureId,sectionId:sec.id,level:'SubFeature',englishName:d.textEn||d.textAr,arabicName:d.textAr||d.textEn,category:cat,mainFeature:existing.mainFeature||mainName,subSection:d.ss.en,subSectionAr:d.ss.ar,phase:d.phase,priority:d.priority||firstPriority,status:d.status,calculatedStatus:'',completionRate:'',isCountable:true,isHidden:false,originalStatus:d.status,lastReviewDate:'',lastUpdatedDate:n.date,lastUpdatedTime:n.time};
+      subs.push(sub);return sub;
+    });
+    existing.lastUpdatedDate=n.date;existing.lastUpdatedTime=n.time;
+    const store=loadAddedSubs();store[existing.featureId]=(store[existing.featureId]||[]).concat(JSON.parse(JSON.stringify(newSubs)));saveAddedSubs(store);
+    reindex();recomputeMain(existing);
+    if(mode==='offline')persistOffline();
+    pushAddedToSheet(buildAddSpecs(cat,existing.mainFeature||mainName,existing.arabicName||mainNameAr,rows),(ok,err)=>afterSheetWrite(ok,err,()=>removeAddedSubs(existing.featureId,newSubs.map(s=>s.featureId))));
+    closeAddMain();amAfterChange();
+    showSaveIndicator('saved');toast(amT('ØªÙØª Ø§ÙØ¥Ø¶Ø§ÙØ© Ø¥ÙÙ Ø§ÙØ®Ø§ØµÙØ© Ø§ÙÙÙØ¬ÙØ¯Ø©','Added to existing feature'),'check');
+    return;
+  }
+  // brand-new main
+  const mid=genMainId(),dno=String(DATA.mains.length+1);
+  const firstPriority=rows[0].priority||'Priority 1';
+  const sectionMap={};let sectionSeq=0;const seqBySection={};let globalSeq=0;
+  const subFeatures=rows.map(d=>{
+    const skey=(d.ss.en||'')+'||'+(d.ss.ar||'');
+    if(!sectionMap[skey]){sectionSeq++;sectionMap[skey]={no:sectionSeq,id:mid+'.S'+sectionSeq,en:d.ss.en,ar:d.ss.ar};seqBySection[skey]=0;}
+    const sec=sectionMap[skey];seqBySection[skey]++;globalSeq++;
+    return{featureId:mid+'-'+String(globalSeq).padStart(3,'0'),displayNo:dno+'.'+sec.no+'-'+String(seqBySection[skey]).padStart(2,'0'),sectionDisplayNo:dno+'.'+sec.no,parentFeatureId:mid,mainFeatureId:mid,sectionId:sec.id,level:'SubFeature',englishName:d.textEn||d.textAr,arabicName:d.textAr||d.textEn,category:cat,mainFeature:mainName,subSection:d.ss.en,subSectionAr:d.ss.ar,phase:d.phase,priority:d.priority||firstPriority,status:d.status,calculatedStatus:'',completionRate:'',isCountable:true,isHidden:false,originalStatus:d.status,lastReviewDate:'',lastUpdatedDate:n.date,lastUpdatedTime:n.time};
+  });
+  const main={featureId:mid,displayNo:dno,parentFeatureId:'',level:'MainFeature',englishName:mainName,arabicName:mainNameAr||mainName,category:cat,categoryAr:CAT_AR_RT[cat]||CAT_AR[cat]||cat,mainFeature:mainName,subSection:'',phase:'',priority:firstPriority,status:'Not Verified',calculatedStatus:'Not Verified',completionRate:0,isCountable:false,isHidden:false,lastReviewDate:'',lastUpdatedDate:n.date,lastUpdatedTime:n.time,subFeatures};
+  DATA.mains.push(main);
+  const added=loadAddedMains();added.push(main);saveAddedMains(added);
+  reindex();recomputeMain(main);
+  if(mode==='offline')persistOffline();
+  pushAddedToSheet(buildAddSpecs(cat,mainName,mainNameAr,rows),(ok,err)=>afterSheetWrite(ok,err,()=>removeAddedMain(mid)));
+  closeAddMain();amAfterChange();
+  showSaveIndicator('saved');toast(amT('ØªÙØª Ø¥Ø¶Ø§ÙØ© Ø§ÙØ®Ø§ØµÙØ© Ø§ÙØ¬Ø¯ÙØ¯Ø©','New feature added'),'check');
+}
+
+function amAfterChange(){
+  renderCategories(false);renderMainDashboard(false);
+  const active=document.querySelector('.view.active');
+  if(active&&active.id==='dashboardView')renderDashboard(false);
+  if(active&&active.id==='trackerView')paintFeatures();
+}
+
+/* ---------- RENAME (synced to Sheet) ---------- */
+function amRename(level,gid){
+  if(!requireAdmin())return;
+  let payload={action:'renameNode',level},curEn='',curAr='',ctx={};
+  if(level==='category'){curEn=amCurrentCat();curAr=CAT_AR_RT[curEn]||CAT_AR[curEn]||curEn;payload.category=curEn;ctx.oldCat=curEn;}
+  else if(level==='main'){const cat=amCurrentCat(),mn=amCurrentMain();const m=findMainByName(cat,mn);if(!m){toast(amT('ØºÙØ± ÙÙØ¬ÙØ¯','Not found'),'error');return;}curEn=m.mainFeature||m.englishName||mn;curAr=m.arabicName||curEn;payload.featureId=m.featureId;ctx.m=m;}
+  else if(level==='subsection'){const ss=amGroupSubsec(gid);curEn=ss.en||ss.ar;curAr=ss.ar||ss.en;const cat=amCurrentCat(),mn=amCurrentMain();const m=findMainByName(cat,mn);payload.mainFeatureId=m?m.featureId:'';payload.oldSubSection=ss.en;payload.oldSubSectionAr=ss.ar;ctx.m=m;ctx.oldEn=ss.en;ctx.oldAr=ss.ar;}
+  if(!curEn&&!curAr){toast(amT('Ø§Ø®ØªØ§Ø±Ù Ø¹ÙØµØ±ÙØ§ Ø£ÙÙØ§Ù','Select an item first'),'error');return;}
+  // Ask for BOTH languages so the item stays bilingual (like the main feature).
+  const enIn=prompt(amT('Ø§ÙØ§Ø³Ù Ø¨Ø§ÙØ¥ÙØ¬ÙÙØ²ÙØ©:','English name:'),curEn);
+  if(enIn==null)return;const newEn=enIn.trim()||curEn;
+  const arIn=prompt(amT('Ø§ÙØ§Ø³Ù Ø¨Ø§ÙØ¹Ø±Ø¨ÙØ©:','Arabic name:'),curAr);
+  if(arIn==null)return;const newAr=arIn.trim()||newEn;
+  payload.newName=newEn;payload.newNameAr=newAr;
+
+  // Optimistic local update (covers local-only items + instant UI refresh)
+  try{
+    if(level==='category'){
+      DATA.mains.forEach(m=>{if(m.category===ctx.oldCat){m.category=newEn;m.categoryAr=newAr;(m.subFeatures||[]).forEach(s=>s.category=newEn);}});
+      delete CAT_AR_RT[ctx.oldCat];CAT_AR_RT[newEn]=newAr;
+      if(typeof selectedCategory!=='undefined'&&selectedCategory===ctx.oldCat)selectedCategory=newEn;
+    }else if(level==='main'&&ctx.m){
+      ctx.m.englishName=newEn;ctx.m.arabicName=newAr;ctx.m.mainFeature=newEn;
+      (ctx.m.subFeatures||[]).forEach(s=>s.mainFeature=newEn);
+    }else if(level==='subsection'&&ctx.m){
+      (ctx.m.subFeatures||[]).forEach(s=>{if((s.subSection||'')===ctx.oldEn||(s.subSectionAr||'')===ctx.oldAr){s.subSection=newEn;s.subSectionAr=newAr;}});
+    }
+    reindex();if(mode==='offline')persistOffline();
+  }catch(e){}
+
+  toast(amT('Ø¬Ø§Ø±Ù Ø§ÙØªØ¹Ø¯ÙÙâ¦','Renamingâ¦'),'pdf');
+  if(mode==='online'&&USE_SHEET){
+    apiPost(payload).then(r=>{
+      if(r&&r.ok){toast(amT('ØªÙ Ø§ÙØªØ¹Ø¯ÙÙ ÙÙØ²Ø§ÙÙØªÙ','Renamed & synced'),'check');closeAddMain();refreshAll();}
+      else{toast(amT('Ø¹ÙØ¯ÙÙ ÙØ­ÙÙÙØ§Ø ÙÙÙ ØªØ¹Ø°ÙØ±Øª Ø§ÙÙØ²Ø§ÙÙØ©','Renamed locally, sync failed')+(r&&r.error?': '+r.error:''),'error');closeAddMain();amAfterChange();}
+    }).catch(e=>{toast(amT('Ø¹ÙØ¯ÙÙ ÙØ­ÙÙÙØ§Ø ÙØªØ¹Ø°ÙØ± Ø§ÙØ§ØªØµØ§Ù','Renamed locally, connection failed'),'error');closeAddMain();amAfterChange();});
+  }else{toast(amT('ØªÙ Ø§ÙØªØ¹Ø¯ÙÙ','Renamed'),'check');closeAddMain();amAfterChange();}
+}
+
+/* ---------- DELETE (synced to Sheet) ---------- */
+// Remove a node locally (DATA + offline deltas in localStorage) so that items
+// added on this device â even if they never reached the Sheet â disappear too.
+function amPurgeLocal(level,info){
+  try{
+    if(level==='category'){
+      const cat=info.category;
+      const victims=DATA.mains.filter(m=>m.category===cat);
+      victims.forEach(m=>{removeAddedMain(m.featureId);const st=loadAddedSubs();if(st[m.featureId]){delete st[m.featureId];saveAddedSubs(st);}});
+      DATA.mains=DATA.mains.filter(m=>m.category!==cat);
+    }else if(level==='main'){
+      const mid=info.featureId;
+      removeAddedMain(mid);const st=loadAddedSubs();if(st[mid]){delete st[mid];saveAddedSubs(st);}
+      DATA.mains=DATA.mains.filter(m=>m.featureId!==mid);
+    }else if(level==='subsection'){
+      const mid=info.mainFeatureId,en=(info.subSection||'').toLowerCase(),ar=(info.subSectionAr||'').toLowerCase();
+      const m=DATA.mains.find(x=>x.featureId===mid);
+      if(m){const match=s=>((s.subSection||'').toLowerCase()===en&&en)||((s.subSectionAr||'').toLowerCase()===ar&&ar);
+        const killIds=(m.subFeatures||[]).filter(match).map(s=>s.featureId);
+        m.subFeatures=(m.subFeatures||[]).filter(s=>!match(s));
+        removeAddedSubs(mid,killIds);recomputeMain(m);}
+    }
+    reindex();persistOffline();
+  }catch(e){}
+}
+
+function amDelete(level,gid){
+  if(!requireAdmin())return;
+  let label='',payload={action:'deleteNode',level},info={};
+  if(level==='category'){label=amCurrentCat();payload.category=label;info.category=label;}
+  else if(level==='main'){const cat=amCurrentCat(),mn=amCurrentMain();const m=findMainByName(cat,mn);if(!m){toast(amT('ØºÙØ± ÙÙØ¬ÙØ¯','Not found'),'error');return;}label=mn;payload.featureId=m.featureId;info.featureId=m.featureId;}
+  else if(level==='subsection'){const ss=amGroupSubsec(gid);label=lang==='ar'?(ss.ar||ss.en):(ss.en||ss.ar);const cat=amCurrentCat(),mn=amCurrentMain();const m=findMainByName(cat,mn);payload.mainFeatureId=m?m.featureId:'';payload.subSection=ss.en;payload.subSectionAr=ss.ar;info={mainFeatureId:payload.mainFeatureId,subSection:ss.en,subSectionAr:ss.ar};}
+  if(!label){toast(amT('Ø§Ø®ØªØ§Ø±Ù Ø¹ÙØµØ±ÙØ§ Ø£ÙÙØ§Ù','Select an item first'),'error');return;}
+  if(!confirm(amT('Ø³ÙØªÙ Ø­Ø°Ù Â«'+label+'Â» ÙÙÙ ÙØ§ ÙØªØ¨Ø¹Ù ÙÙØ§Ø¦ÙÙØ§. ÙØªØ§Ø¨Ø¹Ø©Ø','Delete "'+label+'" and all its children permanently?')))return;
+
+  // 1) Always remove locally first (covers items that were only added on this device).
+  amPurgeLocal(level,info);
+  amAfterChange();
+
+  // 2) If online, also delete from the Sheet, then reload from source of truth.
+  if(mode==='online'&&USE_SHEET){
+    toast(amT('Ø¬Ø§Ø±Ù Ø§ÙØ­Ø°Ù ÙØ§ÙÙØ²Ø§ÙÙØ©â¦','Deleting & syncingâ¦'),'pdf');
+    apiPost(payload).then(r=>{
+      if(r&&r.ok){toast(amT('ØªÙ Ø§ÙØ­Ø°Ù ÙÙØ²Ø§ÙÙØªÙ','Deleted & synced'),'check');closeAddMain();refreshAll();}
+      else{toast(amT('Ø­ÙØ°Ù ÙØ­ÙÙÙØ§Ø ÙÙÙ ØªØ¹Ø°ÙØ±Øª Ø§ÙÙØ²Ø§ÙÙØ©','Removed locally, sync failed')+(r&&r.error?': '+r.error:''),'error');closeAddMain();}
+    }).catch(e=>{toast(amT('Ø­ÙØ°Ù ÙØ­ÙÙÙØ§Ø ÙØªØ¹Ø°ÙØ± Ø§ÙØ§ØªØµØ§Ù Ø¨Ø§ÙØ´ÙØª','Removed locally, connection failed'),'error');closeAddMain();});
+  }else{
+    toast(amT('ØªÙ Ø§ÙØ­Ø°Ù','Deleted'),'check');closeAddMain();
+  }
+}
+
+
+/* ---------- EXPORT TO EXCEL (filtered, self-contained .xls) ---------- */
+function currentTrackerRows(){
+  // Returns the sub-features currently visible under the active filters/category.
+  const rows=[];
+  const base=selectedCategory?mainsIn(selectedCategory):DATA.mains;
+  const q=(document.getElementById('searchInput')||{}).value||'';const ql=q.toLowerCase().trim();
+  const ph=(document.getElementById('phaseFilter')||{}).value||'All';
+  const pr=(document.getElementById('priorityFilter')||{}).value||'All';
+  const stt=(document.getElementById('statusFilter')||{}).value||'All';
+  base.forEach(m=>{const mn=mainNameMatch(m,ql);
+    displaySubsOf(m).forEach(s=>{
+      if(stt==='Not Used'){if(s.status!=='Not Used')return;}else if(s.status==='Not Used')return;
+      if(!(ph==='All'||s.phase===ph))return;
+      if(!(pr==='All'||s.priority===pr))return;
+      if(!(stt==='All'||s.status===stt))return;
+      if(ql&&!mn&&!subMatch(s,ql))return;
+      rows.push({m,s});
+    });
+  });
+  return rows;
+}
+function exportExcel(){
+  const rows=currentTrackerRows();
+  if(!rows.length){toast(tr('exportEmpty'),'error');return;}
+  const headers=['Category','Main Feature','Sub Section','Sub Feature','Phase','Priority','Status','Last Updated','Notes'];
+  const esc=v=>escapeHtml(String(v==null?'':v));
+  let html='<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="UTF-8"></head><body><table border="1"><tr>'+headers.map(h=>`<th>${esc(h)}</th>`).join('')+'</tr>';
+  rows.forEach(({m,s})=>{
+    const notes=notesFor(s.featureId).map(n=>n.note).filter(Boolean).join(' | ');
+    const lu=(s.lastUpdatedDate||'')+(s.lastUpdatedTime?(' '+s.lastUpdatedTime):'');
+    const cells=[m.category||'',nameOf(m),(lang==='ar'?(s.subSectionAr||s.subSection):s.subSection)||'',nameOf(s),s.phase||'',s.priority||'',s.status||'',lu,notes];
+    html+='<tr>'+cells.map(c=>`<td>${esc(c)}</td>`).join('')+'</tr>';
+  });
+  html+='</table></body></html>';
+  const blob=new Blob(['\ufeff'+html],{type:'application/vnd.ms-excel;charset=utf-8'});
+  const url=URL.createObjectURL(blob),a=document.createElement('a');
+  const stamp=today().date;
+  a.href=url;a.download=`AlHammadi_Features_${stamp}.xls`;document.body.appendChild(a);a.click();
+  setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},500);
+  toast(tr('exported'),'check');
+}
+
+/* ====================================================================
+   INIT
+   ==================================================================== */
+syncSidebarVisibility();
+verifyStoredAdmin;
+boot();
+setTimeout(()=>{updateAccessUI();syncSidebarVisibility();},80);
+
+</script>
+
+
+<div id="guideModal" class="guide-modal">
+ <div class="guide-box">
+  <div class="guide-header">
+   <h2 id="guideTitle">Application Features Guide</h2><button class="guide-close-top" onclick="document.getElementById('guideModal').classList.remove('open')" data-ic="x"></button>
+  </div>
+  <div class="guide-content" id="guideContent"></div>
+  <div class="guide-actions">
+   
+  </div>
+ </div>
+</div>
+<script>
+document.addEventListener('click',function(e){
+ if(e.target.closest('.guide-btn')){
+   e.preventDefault();
+   if(typeof renderGuide==='function')renderGuide();
+   document.getElementById('guideModal')?.classList.add('open');
+ }
+});
+</script>
+
+</body>
+</html>
