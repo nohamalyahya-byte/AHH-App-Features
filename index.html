@@ -2576,7 +2576,7 @@ function updateSubName(subId,value){
   const row=document.getElementById('sub-'+cssId(subId));
   markRowEdited(row);showSaveIndicator('saving');
   const rollback=(e)=>{s[field]=prev;paintFeatures();showSaveIndicator('failed');toast((lang==='ar'?'تعذّر الحفظ: ':'Save failed: ')+(e&&e.message?e.message:''),'error');};
-  const done=()=>{const n=today();s.lastUpdatedDate=n.date;s.lastUpdatedTime=n.time;setRowUpdatedLabel(s);showSaveIndicator('saved');toast(tr('saved'),'note');paintFeatures();};
+  const done=()=>{const n=today();s.lastUpdatedDate=n.date;s.lastUpdatedTime=n.time;setRowUpdatedLabel(s);showSaveIndicator('saved');toast(tr('saved'),'note');paintFeatures();refreshActivity();};
   if(mode==='online'){
     apiPost({action:'updateFeatureMeta',featureId:subId,field:field,value:value})
       .then(r=>{if(!r||!(r.ok||r.success||r.saved))throw new Error((r&&r.error)||'Update failed');done();})
@@ -2599,7 +2599,7 @@ function updateSubMeta(subId,field,value){
   showSaveIndicator('saving');
   const action=field==='phase'?'Phase Change':'Priority Change';
   const rollback=(e)=>{s[field]=prev;paintRowMeta(s,field,false);showSaveIndicator('failed');toast((lang==='ar'?'تعذّر الحفظ: ':'Save failed: ')+(e&&e.message?e.message:''),'error');};
-  const done=()=>{const n=today();s.lastUpdatedDate=n.date;s.lastUpdatedTime=n.time;setRowUpdatedLabel(s);paintRowMeta(s,field,false);showSaveIndicator('saved');toast(tr('saved'),'note');if(parent)updateParentCard(parent);buildFilters();};
+  const done=()=>{const n=today();s.lastUpdatedDate=n.date;s.lastUpdatedTime=n.time;setRowUpdatedLabel(s);paintRowMeta(s,field,false);showSaveIndicator('saved');toast(tr('saved'),'note');if(parent)updateParentCard(parent);buildFilters();refreshActivity();};
   if(mode==='online'){
     apiPost({action:'updateFeatureMeta',featureId:subId,field:field,value:value||''})
       .then(r=>{if(!r||!(r.ok||r.success||r.saved))throw new Error((r&&r.error)||'Update failed');done();})
@@ -2694,7 +2694,7 @@ function saveNote(){if(!requireAdmin())return;const t=document.getElementById('n
     apiPost({action:'saveNote',featureId:currentFeatureId,note:t,source:'User Note'})
       .then(r=>{if(!r||!(r.ok||r.success||r.saved))throw 0;document.getElementById('noteText').value='';return Promise.all([apiGet('getNotes',{featureId:currentFeatureId}),apiGet('getActivityLog')]);})
       .then(([nr,ar])=>{if(nr&&nr.notes)DATA.notes[currentFeatureId]=nr.notes.map(n=>({noteId:n.noteId,featureId:currentFeatureId,date:n.date,time:n.time,source:n.source||'User Note',note:n.note||''}));
-        if(ar&&ar.activity)DATA.activity=ar.activity.map(x=>({id:x.activityId,fid:x.featureId,type:x.activityType,oldStatus:x.oldStatus,newStatus:x.newStatus,date:x.date,time:x.time}));
+        if(ar&&ar.activity)DATA.activity=ar.activity.map(x=>({id:x.activityId,fid:x.featureId,type:x.activityType,oldStatus:x.oldStatus,newStatus:x.newStatus,note:x.note||x.newStatus||'',date:x.date,time:x.time}));
         renderNotesPanel();renderActivity();updateNoteCount(currentFeatureId);toast(tr('noteSaved'),'note');})
       .catch((e)=>toast((lang==='ar'?'تعذّر حفظ الملاحظة: ':'Save failed: ')+(e&&e.message?e.message:''),'error'));
     return;}
@@ -2733,12 +2733,52 @@ function cleanActivityTime(v){
 }
 function activityDateTime(a){const d=formatActivityDate(a.date),t=cleanActivityTime(a.time);return d&&t?`${d} · ${t}`:(d||t||'');}
 function clearActivityDate(){const d=document.getElementById('activityDate');if(d)d.value='';renderActivity();}
-function activityTimeline(list){return `<div class="timeline">`+list.map((a,i)=>{const f=BY_ID[a.fid]||{englishName:a.fid,arabicName:''};const isStatus=a.type==='Status Change',typeLabel=isStatus?tr('statusChange'):tr('noteAdded');let desc;
-  if(isStatus){const so=statusMeta(a.oldStatus),sn=statusMeta(a.newStatus);desc=`<span class="tl-status-chip" style="background:${so.bg};color:${so.color}">${statusText(a.oldStatus)}</span> → <span class="tl-status-chip" style="background:${sn.bg};color:${sn.color}">${statusText(a.newStatus)}</span>`;}
-  else desc=escapeHtml(a.note||'');
-  return `<div class="tl-item" style="animation-delay:${Math.min(i,12)*45}ms"><div class="tl-node ${isStatus?'':'note'}">${svg(isStatus?'activity':'note')}</div>
-    <div class="tl-card"><div class="tl-time">${svg('calendar','icon-sm')}<span dir="ltr">${escapeHtml(activityDateTime(a))}</span> · ${typeLabel}</div>
-    <div class="tl-title">${escapeHtml(nameOf(f))} <span class="fc-id">${escapeHtml(a.fid)}</span></div><div class="tl-desc">${desc}</div></div></div>`;}).join('')+`</div>`;}
+function activityTypeLabel(type){
+  const t=String(type||'');
+  const map={
+    'Status Change': lang==='ar'?'تغيير الحالة':'Status Change',
+    'Priority Change': lang==='ar'?'تغيير الأولوية':'Priority Change',
+    'Phase Change': lang==='ar'?'تغيير المرحلة':'Phase Change',
+    'Sub Feature Name Change': lang==='ar'?'تعديل اسم الخاصية':'Feature Name Change',
+    'Name Change': lang==='ar'?'تعديل الاسم':'Name Change',
+    'Feature Details Change': lang==='ar'?'تعديل تفاصيل الخاصية':'Feature Details Change',
+    'Note Added': lang==='ar'?'إضافة ملاحظة':'Note Added',
+    'Feature Added': lang==='ar'?'إضافة خاصية':'Feature Added',
+    'Renamed': lang==='ar'?'إعادة تسمية':'Renamed',
+    'Deleted': lang==='ar'?'حذف':'Deleted',
+    'Test Write': lang==='ar'?'اختبار حفظ':'Test Write'
+  };
+  return map[t] || t || (lang==='ar'?'نشاط':'Activity');
+}
+function activityNodeIcon(type){
+  const t=String(type||'');
+  if(t==='Note Added')return 'note';
+  if(t==='Status Change')return 'activity';
+  if(t==='Priority Change')return 'tag';
+  if(t==='Phase Change')return 'phase';
+  if(t.indexOf('Name')>-1||t.indexOf('Details')>-1)return 'edit';
+  return 'activity';
+}
+function activityChangeDesc(a){
+  const type=String(a.type||'');
+  const oldVal=(a.oldStatus==null?'':String(a.oldStatus));
+  const newVal=(a.newStatus==null?'':String(a.newStatus));
+  if(type==='Note Added') return escapeHtml(a.note||newVal||'');
+  if(type==='Status Change'){
+    const so=statusMeta(oldVal),sn=statusMeta(newVal);
+    return `<span class="tl-status-chip" style="background:${so.bg};color:${so.color}">${statusText(oldVal)}</span> → <span class="tl-status-chip" style="background:${sn.bg};color:${sn.color}">${statusText(newVal)}</span>`;
+  }
+  if(oldVal||newVal){
+    const oldText=oldVal?escapeHtml(oldVal):(lang==='ar'?'فارغ':'Empty');
+    const newText=newVal?escapeHtml(newVal):(lang==='ar'?'فارغ':'Empty');
+    return `<span class="tl-status-chip" style="background:#F1F5F9;color:#64748B">${oldText}</span> → <span class="tl-status-chip" style="background:#EAF1FB;color:#1855A4">${newText}</span>`;
+  }
+  return '';
+}
+function activityTimeline(list){return `<div class="timeline">`+list.map((a,i)=>{const f=BY_ID[a.fid]||{englishName:a.fid,arabicName:''};const label=activityTypeLabel(a.type);const icon=activityNodeIcon(a.type);const desc=activityChangeDesc(a);
+  return `<div class="tl-item" style="animation-delay:${Math.min(i,12)*45}ms"><div class="tl-node ${icon==='note'?'note':''}">${svg(icon)}</div>
+    <div class="tl-card"><div class="tl-time">${svg('calendar','icon-sm')}<span dir="ltr">${escapeHtml(activityDateTime(a))}</span> · ${escapeHtml(label)}</div>
+    <div class="tl-title">${escapeHtml(nameOf(f))} <span class="fc-id">${escapeHtml(a.fid)}</span></div>${desc?`<div class="tl-desc">${desc}</div>`:''}</div></div>`;}).join('')+`</div>`;}
 function renderActivity(){
   if(!isAdminMode){
     const el=document.getElementById('activityList');
@@ -2751,7 +2791,7 @@ function renderActivity(){
     el.innerHTML=`<div class="empty"><div><svg class="empty-illustration" viewBox="0 0 200 200" fill="none"><circle cx="100" cy="100" r="58" stroke="#DCE8F8" stroke-width="9"/><path d="M100 66v36l24 14" stroke="#1855A4" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/></svg><h3>${msg}</h3><p>${sub}</p></div></div>`;return;}
   el.innerHTML=activityTimeline(list);}
 function refreshActivity(){if(!isAdminMode)return; if(mode==='online'){document.getElementById('activityList').innerHTML=skeletonCards(4,'sk-row');
-  apiGet('getActivityLog').then(r=>{if(r&&r.activity)DATA.activity=r.activity.map(x=>({id:x.activityId,fid:x.featureId,type:x.activityType,oldStatus:x.oldStatus,newStatus:x.newStatus,date:x.date,time:x.time}));renderActivity();}).catch(()=>renderActivity());}
+  apiGet('getActivityLog').then(r=>{if(r&&r.activity)DATA.activity=r.activity.map(x=>({id:x.activityId,fid:x.featureId,type:x.activityType,oldStatus:x.oldStatus,newStatus:x.newStatus,note:x.note||x.newStatus||'',date:x.date,time:x.time}));renderActivity();}).catch(()=>renderActivity());}
   else renderActivity();}
 /* dev/testing only — not exposed in the UI */
 function clearActivityLog(){DATA.activity=[];if(mode==='offline')persistOffline();renderActivity();return 'Activity cleared.';}
