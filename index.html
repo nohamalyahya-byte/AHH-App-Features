@@ -280,7 +280,6 @@ body.ar .feature-card::before{left:auto;right:0}
 .tl-desc{font-size:11px;color:var(--muted);margin-top:4px;line-height:1.5}
 .tl-status-chip{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:3px 9px;font-size:10px;font-weight:850}
 .tl-text{font-size:12px;line-height:1.65;color:var(--text);margin-top:4px}
-.tl-item.pending .tl-card{border-color:#FCD34D;background:#FFFBEB}
 .no-notes{text-align:center;color:var(--muted);padding:26px 10px;font-size:12px}
 
 /* notes panel */
@@ -1786,7 +1785,7 @@ const OFFLINE_NOTES={"Ob2-011":[{"noteId":"N0001","featureId":"Ob2-011","date":"
 
 const SHEET_API_URL = "https://script.google.com/macros/s/AKfycbx80_vTKMVJza4OPYkPHvm_LZ5EufLsdSZMnnAZmWm1NmGeZ0-XOlh9Gcx1bkvpxnzwqA/exec";
 const ADMIN_PASS_KEY = 'ah_features_admin_pass_v1';
-let isAdminMode = !!localStorage.getItem(ADMIN_PASS_KEY);
+let isAdminMode = false; // verified on boot before enabling edit mode
 
 const CANON=['Available','Partially Available','Not Available','Not Verified'];
 const PHASE_ACCENT={"Phase 1":"#1855A4","Phase 2":"#3B7DC4","Phase 3":"#7499C8"};
@@ -1869,39 +1868,57 @@ const STR={
 
 /* ---------- API ---------- */
 const USE_SHEET=!!SHEET_API_URL;
-function apiGet(action,params){const u=new URL(SHEET_API_URL);u.searchParams.set('action',action);if(params)Object.entries(params).forEach(([k,v])=>u.searchParams.set(k,v));return fetch(u.toString()).then(r=>r.json());}
-
-/* Stable Save Engine v2.0
-   - Serializes all write requests to avoid Google Apps Script LockService conflicts.
-   - Retries temporary failures automatically.
-   - Prevents overlapping saves when the user changes status, details, and notes quickly. */
-let __writeQueue=Promise.resolve();
+function apiGet(action,params){
+  const u=new URL(SHEET_API_URL);
+  u.searchParams.set('action',action);
+  if(params)Object.entries(params).forEach(([k,v])=>u.searchParams.set(k,v));
+  return fetch(u.toString(),{cache:'no-store'})
+    .then(r=>r.text())
+    .then(t=>{try{return JSON.parse(t||'{}');}catch(e){return{ok:false,error:'bad_json_response',raw:t};}});
+}
 function wait(ms){return new Promise(res=>setTimeout(res,ms));}
+let __writeQueue=Promise.resolve();
+function clearBadAdminSession(){
+  try{localStorage.removeItem(ADMIN_PASS_KEY);}catch(e){}
+  isAdminMode=false;
+  updateAccessUI();
+}
+function normalizeApiError(r){return String((r&&r.error)||'save_failed');}
 function apiPostRaw(payload){
   const pass=localStorage.getItem(ADMIN_PASS_KEY)||'';
   const body=JSON.stringify({...payload,adminPassword:pass});
-  return fetch(SHEET_API_URL,{method:'POST',body})
+  return fetch(SHEET_API_URL,{method:'POST',cache:'no-store',headers:{'Content-Type':'text/plain;charset=utf-8'},body})
     .then(r=>r.text())
-    .then(t=>{try{return JSON.parse(t||'{}');}catch(e){return{ok:false,error:'bad_response',raw:t};}});
+    .then(t=>{try{return JSON.parse(t||'{}');}catch(e){return{ok:false,error:'bad_json_response',raw:t};}});
 }
 function apiPost(payload){
   const run=async()=>{
-    let lastErr=null;
+    let last=null;
     for(let attempt=0;attempt<3;attempt++){
-      try{
-        const r=await apiPostRaw(payload);
-        if(r&&(r.ok||r.success||r.saved))return r;
-        lastErr=new Error((r&&r.error)||'save_failed');
-        // Retry only transient/lock/server style failures; unauthorized should return immediately.
-        if(String(lastErr.message).toLowerCase().includes('unauthorized'))throw lastErr;
-      }catch(e){lastErr=e;}
-      await wait(500+(attempt*850));
+      const r=await apiPostRaw(payload).catch(e=>({ok:false,error:String(e&&e.message||e)}));
+      if(r&&(r.ok||r.success||r.saved))return r;
+      last=r;
+      const msg=normalizeApiError(r).toLowerCase();
+      if(msg.includes('unauthorized')){clearBadAdminSession();throw new Error('unauthorized');}
+      if(msg.includes('unknown_action')||msg.includes('feature_not_found')||msg.includes('sheet_not_found')||msg.includes('missing_header'))throw new Error(normalizeApiError(r));
+      await wait(450+(attempt*700));
     }
-    throw lastErr||new Error('save_failed');
+    throw new Error(normalizeApiError(last));
   };
   const job=__writeQueue.then(run,run);
   __writeQueue=job.catch(()=>{});
   return job;
+}
+function verifyStoredAdmin(){
+  const pass=localStorage.getItem(ADMIN_PASS_KEY)||'';
+  if(!pass){isAdminMode=false;updateAccessUI();return Promise.resolve(false);}
+  if(!USE_SHEET){isAdminMode=true;updateAccessUI();return Promise.resolve(true);}
+  return apiPostRaw({action:'verifyAdmin'}).then(r=>{
+    isAdminMode=!!(r&&r.ok&&r.isAdmin);
+    if(!isAdminMode) localStorage.removeItem(ADMIN_PASS_KEY);
+    updateAccessUI();paintFeatures();
+    return isAdminMode;
+  }).catch(()=>{isAdminMode=false;updateAccessUI();return false;});
 }
 function syncSidebarVisibility(viewId){
   const id=viewId || (document.querySelector('.view.active')?document.querySelector('.view.active').id:'mainDashboardView');
@@ -1947,8 +1964,9 @@ function toggleAdminMode(){
   if(!pass)return;
   localStorage.setItem(ADMIN_PASS_KEY,pass);
   if(USE_SHEET){
-    apiPost({action:'verifyAdmin'}).then(r=>{
-      if(r&&r.ok&&r.isAdmin){isAdminMode=true;updateAccessUI();paintFeatures();toast(t.saved);}else{localStorage.removeItem(ADMIN_PASS_KEY);isAdminMode=false;updateAccessUI();toast(t.denied,'error');}
+    apiPostRaw({action:'verifyAdmin'}).then(r=>{
+      if(r&&r.ok&&r.isAdmin){isAdminMode=true;updateAccessUI();paintFeatures();toast(t.saved);}
+      else{localStorage.removeItem(ADMIN_PASS_KEY);isAdminMode=false;updateAccessUI();toast(t.denied+(r&&r.error?': '+r.error:''),'error');}
     }).catch(()=>{localStorage.removeItem(ADMIN_PASS_KEY);isAdminMode=false;updateAccessUI();toast(t.denied,'error');});
   }else{isAdminMode=true;updateAccessUI();paintFeatures();toast(t.saved);}
 }
@@ -2033,8 +2051,9 @@ function skeletonCards(n,cls){return Array(n).fill(`<div class="skeleton ${cls}"
    ==================================================================== */
 function boot(){
   (function(){const os=document.getElementById('overallSection'),cs=document.getElementById('completionSection');if(os&&cs&&os.parentNode&&os.previousElementSibling!==cs)os.parentNode.insertBefore(cs,os);})();
-  if(USE_SHEET){mode='online';loadOnline(true);return;}
-  loadOffline();              // embedded matrix is the working source; changes saved locally
+  if(USE_SHEET){mode='online';loadOnline(true).then(()=>verifyStoredAdmin());return;}
+  loadOffline();
+  verifyStoredAdmin();              // embedded matrix is the working source; changes saved locally
 }
 function normalizeMains(raw){
   const mains=(raw||[]).map(m=>{
@@ -2396,18 +2415,18 @@ function saveFeatureDetails(){
   showSaveIndicator('saving');
   const apply=()=>{s.arabicName=arabicName;s.englishName=englishName;s.phase=phase;s.priority=priority;s.status=status;s.isHidden=(status==='Not Used');const n=today();s.lastUpdatedDate=n.date;s.lastUpdatedTime=n.time;DATA.mains.forEach(m=>recomputeMain(m));};
   const restore=()=>{s.arabicName=prev.arabicName;s.englishName=prev.englishName;s.phase=prev.phase;s.priority=prev.priority;s.status=prev.status;s.isHidden=(prev.status==='Not Used');DATA.mains.forEach(m=>recomputeMain(m));};
-  const refreshAfterLocal=()=>{if(btn)btn.disabled=false;closeFeatureEditModal();const row=document.getElementById('sub-'+cssId(id));if(row){const txt=row.querySelector('.sub-name-text');if(txt)txt.textContent=nameOf(s);const inp=row.querySelector('.sub-name-input');if(inp)inp.value=nameOf(s);paintRowMeta(s,'phase',false);paintRowMeta(s,'priority',false);paintRowStatus(s,false);setRowUpdatedLabel(s);markRowEdited(row);}updateParentCard(BY_ID[s.mainFeatureId||s.parentFeatureId]);renderMainDashboard(false);renderDashboard(false);};
+  const refreshAfterLocal=()=>{if(btn)btn.disabled=false;closeFeatureEditModal();buildFilters();paintFeatures();renderMainDashboard(false);renderDashboard(false);setTimeout(()=>{const row=document.getElementById('sub-'+cssId(id));markRowEdited(row);},80);};
 
-  // Fast optimistic save: update the screen immediately, then sync to Google Sheet.
-  apply();refreshAfterLocal();showSaveIndicator('saved');toast(tr('saved'),'note');
+  // Optimistic screen update, but do NOT show Saved until Google Sheet confirms.
+  apply();refreshAfterLocal();showSaveIndicator('saving');
   if(mode==='online'){
     apiPost({action:'updateFeatureDetails',featureId:id,arabicName,englishName,phase,priority,status})
-      .then(r=>{if(!r||!(r.ok||r.success||r.saved))throw new Error((r&&r.error)||'Update failed');})
-      .catch(()=>{restore();const row=document.getElementById('sub-'+cssId(id));if(row){const txt=row.querySelector('.sub-name-text');if(txt)txt.textContent=nameOf(s);const inp=row.querySelector('.sub-name-input');if(inp)inp.value=nameOf(s);paintRowMeta(s,'phase',false);paintRowMeta(s,'priority',false);paintRowStatus(s,false);}renderMainDashboard(false);renderDashboard(false);showSaveIndicator('failed');toast(tr('saveFailed'),'error');});
+      .then(()=>{showSaveIndicator('saved');toast(tr('saved'),'note');refreshActivity();})
+      .catch((e)=>{restore();buildFilters();paintFeatures();renderMainDashboard(false);renderDashboard(false);showSaveIndicator('failed');toast((lang==='ar'?'تعذّر الحفظ: ':'Save failed: ')+(e&&e.message?e.message:''),'error');});
   }else{
     const n=today();
     DATA.activity.unshift({id:'A'+String(DATA.activity.length+1).padStart(4,'0'),fid:id,type:'Feature Details Change',oldStatus:prev.status,newStatus:status,date:n.date,time:n.time});
-    persistOffline();
+    persistOffline();showSaveIndicator('saved');toast(tr('saved'),'note');
   }
 }
 
@@ -2551,20 +2570,16 @@ function updateSubName(subId,value){
   const field=(lang==='ar')?'arabicName':'englishName';
   const prev=s[field]||'';
   value=String(value||'').trim();
-  const row=document.getElementById('sub-'+cssId(subId));
-  if(!value){if(row){const inp=row.querySelector('.sub-name-input');if(inp)inp.value=prev;}return;}
+  if(!value){paintFeatures();return;}
   if(prev===value)return;
   s[field]=value;
-  if(row){
-    const txt=row.querySelector('.sub-name-text');if(txt)txt.textContent=nameOf(s);
-    const inp=row.querySelector('.sub-name-input');if(inp)inp.value=nameOf(s);
-  }
+  const row=document.getElementById('sub-'+cssId(subId));
   markRowEdited(row);showSaveIndicator('saving');
-  const rollback=()=>{s[field]=prev;if(row){const txt=row.querySelector('.sub-name-text');if(txt)txt.textContent=nameOf(s);const inp=row.querySelector('.sub-name-input');if(inp)inp.value=nameOf(s);}showSaveIndicator('failed');toast(tr('saveFailed'),'error');};
-  const done=()=>{const n=today();s.lastUpdatedDate=n.date;s.lastUpdatedTime=n.time;setRowUpdatedLabel(s);showSaveIndicator('saved');toast(tr('saved'),'note');};
+  const rollback=(e)=>{s[field]=prev;paintFeatures();showSaveIndicator('failed');toast((lang==='ar'?'تعذّر الحفظ: ':'Save failed: ')+(e&&e.message?e.message:''),'error');};
+  const done=()=>{const n=today();s.lastUpdatedDate=n.date;s.lastUpdatedTime=n.time;setRowUpdatedLabel(s);showSaveIndicator('saved');toast(tr('saved'),'note');paintFeatures();};
   if(mode==='online'){
     apiPost({action:'updateFeatureMeta',featureId:subId,field:field,value:value})
-      .then(done)
+      .then(r=>{if(!r||!(r.ok||r.success||r.saved))throw new Error((r&&r.error)||'Update failed');done();})
       .catch(rollback);
   }else{
     const n=today();DATA.activity.unshift({id:'A'+String(DATA.activity.length+1).padStart(4,'0'),fid:subId,type:'Name Change',oldStatus:prev,newStatus:value,date:n.date,time:n.time});persistOffline();done();
@@ -2583,7 +2598,7 @@ function updateSubMeta(subId,field,value){
   const row=document.getElementById('sub-'+cssId(subId));markRowEdited(row);
   showSaveIndicator('saving');
   const action=field==='phase'?'Phase Change':'Priority Change';
-  const rollback=()=>{s[field]=prev;paintRowMeta(s,field,false);showSaveIndicator('failed');};
+  const rollback=(e)=>{s[field]=prev;paintRowMeta(s,field,false);showSaveIndicator('failed');toast((lang==='ar'?'تعذّر الحفظ: ':'Save failed: ')+(e&&e.message?e.message:''),'error');};
   const done=()=>{const n=today();s.lastUpdatedDate=n.date;s.lastUpdatedTime=n.time;setRowUpdatedLabel(s);paintRowMeta(s,field,false);showSaveIndicator('saved');toast(tr('saved'),'note');if(parent)updateParentCard(parent);buildFilters();};
   if(mode==='online'){
     apiPost({action:'updateFeatureMeta',featureId:subId,field:field,value:value||''})
@@ -2607,18 +2622,17 @@ function flushStatusSaves(){
 
   if(mode==='online'){
     showSaveIndicator('saving');
-    // apiPost is already queued; this batch is sent sequentially to prevent LockService collisions.
     Promise.all(batch.map(c=>
       apiPost({action:'updateFeatureStatus',featureId:c.id,newStatus:c.next})
-        .then(()=>({c,ok:true}))
-        .catch((e)=>({c,ok:false,error:e}))
+        .then(r=>{if(!r||!(r.ok||r.success||r.saved))throw new Error((r&&r.error)||'Update failed');return{c,ok:true};})
+        .catch(()=>({c,ok:false}))
     )).then(results=>{
       const failed=results.filter(r=>!r.ok).map(r=>r.c);
       reenable();
       if(failed.length){
         failed.forEach(c=>{const s=BY_ID[c.id];if(s){s.status=c.prev;s.isHidden=(c.prev==='Not Used');paintRowStatus(s,false);updateParentCard(BY_ID[c.parentId]);}});
-        showSaveIndicator('failed');toast(tr('saveFailed'),'error');
-      }else{stamp();showSaveIndicator('saved');toast(tr('saved'),'note');}
+        showSaveIndicator('failed');
+      }else{stamp();showSaveIndicator('saved');toast(tr('saved'),'note');refreshActivity();}
     });
     return;
   }
@@ -2672,32 +2686,22 @@ function renderNotesPanel(){const o=BY_ID[currentFeatureId];if(!o)return;const p
   document.getElementById('noteFeatureMini').innerHTML=`<div class="id">${escapeHtml(o.featureId)}${parent?' · '+escapeHtml(nameOf(parent)):''}${o.phase?' · '+phaseLabel(o.phase):''}</div><div class="name">${escapeHtml(nameOf(o))}</div>`;
   const list=notesFor(currentFeatureId);document.getElementById('historyTitle').textContent=`${tr('notesHistory')} (${list.length})`;
   document.getElementById('notesHistory').innerHTML=list.length?`<div class="timeline">`+list.map((nt,i)=>{const init=(nt.source==='Initial Review');
-    return `<div class="tl-item ${nt.pending?'pending':''}" style="animation-delay:${Math.min(i,15)*40}ms"><div class="tl-node ${init?'imp':'note'}">${svg(init?'import':'note')}</div>
+    return `<div class="tl-item" style="animation-delay:${Math.min(i,15)*40}ms"><div class="tl-node ${init?'imp':'note'}">${svg(init?'import':'note')}</div>
      <div class="tl-card"><div class="tl-time">${svg('calendar','icon-sm')}${nt.date?escapeHtml(String(nt.date))+(nt.time?' · '+escapeHtml(String(nt.time)):''):''}<span class="src-badge ${init?'imp':''}">${init?tr('initialReview'):tr('userNote')}</span></div>
      <div class="tl-text">${escapeHtml(nt.note)}</div></div></div>`;}).join('')+`</div>`:`<div class="no-notes">${tr('noNotes')}</div>`;}
-function saveNote(){
-  if(!requireAdmin())return;
-  const box=document.getElementById('noteText');
-  const t=String(box.value||'').trim();
-  const fid=currentFeatureId;
-  if(!t||!fid){toast(tr('errorEmpty'),'error');return;}
-  const n=today();
-  const localNote={noteId:'P'+Date.now(),featureId:fid,date:n.date,time:n.time,source:'User Note',note:t,pending:true};
-  DATA.notes[fid]=DATA.notes[fid]||[];
-  DATA.notes[fid].unshift(localNote);
-  DATA.activity.unshift({id:'A'+String(DATA.activity.length+1).padStart(4,'0'),fid:fid,type:'Note Added',note:t,date:n.date,time:n.time});
-  box.value='';
-  renderNotesPanel();renderActivity();updateNoteCount(fid);showSaveIndicator('saving');toast(tr('syncing'),'note');
-  if(mode==='online'){
-    apiPost({action:'saveNote',featureId:fid,note:t,source:'User Note'})
-      .then(r=>{localNote.pending=false;if(r&&r.noteId)localNote.noteId=r.noteId;showSaveIndicator('saved');if(currentFeatureId===fid)renderNotesPanel();toast(tr('noteSaved'),'note');})
-      .catch(()=>{showSaveIndicator('failed');localNote.pending=true;if(currentFeatureId===fid)renderNotesPanel();toast(lang==='ar'?'تم حفظ الملاحظة في الشاشة، لكن تعذّرت مزامنتها مع الشيت. أعيدي المحاولة بعد تحديث الصفحة.':'Note kept on screen, but Sheet sync failed. Please retry after refreshing.','error');});
-    return;
-  }
-  userNotes[fid]=userNotes[fid]||[];
-  userNotes[fid].unshift(localNote);
-  persistOffline();showSaveIndicator('saved');toast(tr('noteSaved'),'note');
-}
+function saveNote(){if(!requireAdmin())return;const t=document.getElementById('noteText').value.trim();if(!t||!currentFeatureId){toast(tr('errorEmpty'),'error');return;}
+  if(mode==='online'){toast(tr('syncing'));
+    apiPost({action:'saveNote',featureId:currentFeatureId,note:t,source:'User Note'})
+      .then(r=>{if(!r||!(r.ok||r.success||r.saved))throw 0;document.getElementById('noteText').value='';return Promise.all([apiGet('getNotes',{featureId:currentFeatureId}),apiGet('getActivityLog')]);})
+      .then(([nr,ar])=>{if(nr&&nr.notes)DATA.notes[currentFeatureId]=nr.notes.map(n=>({noteId:n.noteId,featureId:currentFeatureId,date:n.date,time:n.time,source:n.source||'User Note',note:n.note||''}));
+        if(ar&&ar.activity)DATA.activity=ar.activity.map(x=>({id:x.activityId,fid:x.featureId,type:x.activityType,oldStatus:x.oldStatus,newStatus:x.newStatus,date:x.date,time:x.time}));
+        renderNotesPanel();renderActivity();updateNoteCount(currentFeatureId);toast(tr('noteSaved'),'note');})
+      .catch((e)=>toast((lang==='ar'?'تعذّر حفظ الملاحظة: ':'Save failed: ')+(e&&e.message?e.message:''),'error'));
+    return;}
+  const n=today();userNotes[currentFeatureId]=userNotes[currentFeatureId]||[];
+  userNotes[currentFeatureId].unshift({noteId:'U'+Date.now(),featureId:currentFeatureId,date:n.date,time:n.time,source:'User Note',note:t});
+  DATA.activity.unshift({id:'A'+String(DATA.activity.length+1).padStart(4,'0'),fid:currentFeatureId,type:'Note Added',note:t,date:n.date,time:n.time});
+  persistOffline();document.getElementById('noteText').value='';renderNotesPanel();renderActivity();updateNoteCount(currentFeatureId);toast(tr('noteSaved'),'note');}
 
 /* ====================================================================
    ACTIVITY LOG  (only real records; no demo data)
@@ -3427,6 +3431,7 @@ function exportExcel(){
    INIT
    ==================================================================== */
 syncSidebarVisibility();
+verifyStoredAdmin;
 boot();
 setTimeout(()=>{updateAccessUI();syncSidebarVisibility();},80);
 
