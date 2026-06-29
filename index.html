@@ -1785,7 +1785,7 @@ const OFFLINE_NOTES={"Ob2-011":[{"noteId":"N0001","featureId":"Ob2-011","date":"
 
 const SHEET_API_URL = "https://script.google.com/macros/s/AKfycbx80_vTKMVJza4OPYkPHvm_LZ5EufLsdSZMnnAZmWm1NmGeZ0-XOlh9Gcx1bkvpxnzwqA/exec";
 const ADMIN_PASS_KEY = 'ah_features_admin_pass_v1';
-let isAdminMode = false; // verified on boot before enabling edit mode
+let isAdminMode = !!localStorage.getItem(ADMIN_PASS_KEY);
 
 const CANON=['Available','Partially Available','Not Available','Not Verified'];
 const PHASE_ACCENT={"Phase 1":"#1855A4","Phase 2":"#3B7DC4","Phase 3":"#7499C8"};
@@ -1868,57 +1868,25 @@ const STR={
 
 /* ---------- API ---------- */
 const USE_SHEET=!!SHEET_API_URL;
-function apiGet(action,params){
-  const u=new URL(SHEET_API_URL);
-  u.searchParams.set('action',action);
-  if(params)Object.entries(params).forEach(([k,v])=>u.searchParams.set(k,v));
-  return fetch(u.toString(),{cache:'no-store'})
-    .then(r=>r.text())
-    .then(t=>{try{return JSON.parse(t||'{}');}catch(e){return{ok:false,error:'bad_json_response',raw:t};}});
-}
-function wait(ms){return new Promise(res=>setTimeout(res,ms));}
-let __writeQueue=Promise.resolve();
-function clearBadAdminSession(){
-  try{localStorage.removeItem(ADMIN_PASS_KEY);}catch(e){}
-  isAdminMode=false;
-  updateAccessUI();
-}
-function normalizeApiError(r){return String((r&&r.error)||'save_failed');}
-function apiPostRaw(payload){
-  const pass=localStorage.getItem(ADMIN_PASS_KEY)||'';
-  const body=JSON.stringify({...payload,adminPassword:pass});
-  return fetch(SHEET_API_URL,{method:'POST',cache:'no-store',headers:{'Content-Type':'text/plain;charset=utf-8'},body})
-    .then(r=>r.text())
-    .then(t=>{try{return JSON.parse(t||'{}');}catch(e){return{ok:false,error:'bad_json_response',raw:t};}});
-}
+function apiGet(action,params){const u=new URL(SHEET_API_URL);u.searchParams.set('action',action);if(params)Object.entries(params).forEach(([k,v])=>u.searchParams.set(k,v));return fetch(u.toString()).then(r=>r.json());}
 function apiPost(payload){
-  const run=async()=>{
-    let last=null;
-    for(let attempt=0;attempt<3;attempt++){
-      const r=await apiPostRaw(payload).catch(e=>({ok:false,error:String(e&&e.message||e)}));
-      if(r&&(r.ok||r.success||r.saved))return r;
-      last=r;
-      const msg=normalizeApiError(r).toLowerCase();
-      if(msg.includes('unauthorized')){clearBadAdminSession();throw new Error('unauthorized');}
-      if(msg.includes('unknown_action')||msg.includes('feature_not_found')||msg.includes('sheet_not_found')||msg.includes('missing_header'))throw new Error(normalizeApiError(r));
-      await wait(450+(attempt*700));
-    }
-    throw new Error(normalizeApiError(last));
-  };
-  const job=__writeQueue.then(run,run);
-  __writeQueue=job.catch(()=>{});
-  return job;
-}
-function verifyStoredAdmin(){
   const pass=localStorage.getItem(ADMIN_PASS_KEY)||'';
-  if(!pass){isAdminMode=false;updateAccessUI();return Promise.resolve(false);}
-  if(!USE_SHEET){isAdminMode=true;updateAccessUI();return Promise.resolve(true);}
-  return apiPostRaw({action:'verifyAdmin'}).then(r=>{
-    isAdminMode=!!(r&&r.ok&&r.isAdmin);
-    if(!isAdminMode) localStorage.removeItem(ADMIN_PASS_KEY);
-    updateAccessUI();paintFeatures();
-    return isAdminMode;
-  }).catch(()=>{isAdminMode=false;updateAccessUI();return false;});
+  return fetch(SHEET_API_URL,{method:'POST',body:JSON.stringify({...payload,adminPassword:pass})}).then(r=>r.json());
+}
+function normalizeActivityList(activity){
+  return (activity||[]).map(x=>({id:x.activityId||x.id||'',fid:x.featureId||x.fid||'',type:x.activityType||x.type||'',oldStatus:x.oldStatus||x.oldValue||'',newStatus:x.newStatus||x.newValue||'',date:x.date||'',time:x.time||'',note:x.note||''}));
+}
+function applyServerActivity(r){
+  if(r&&Array.isArray(r.activity)){DATA.activity=normalizeActivityList(r.activity);renderActivity();}
+}
+function serverSave(operations){
+  const ops=Array.isArray(operations)?operations:[operations];
+  return apiPost({action:'saveChanges',operations:ops}).then(r=>{
+    if(!r||!(r.ok||r.partial))throw new Error((r&&r.error)||'Save failed');
+    if(r.partial&&(!r.saved||r.saved<ops.length))throw new Error(((r.results||[]).find(x=>!x.ok)||{}).error||'Partial save failed');
+    applyServerActivity(r);
+    return r;
+  });
 }
 function syncSidebarVisibility(viewId){
   const id=viewId || (document.querySelector('.view.active')?document.querySelector('.view.active').id:'mainDashboardView');
@@ -1964,9 +1932,8 @@ function toggleAdminMode(){
   if(!pass)return;
   localStorage.setItem(ADMIN_PASS_KEY,pass);
   if(USE_SHEET){
-    apiPostRaw({action:'verifyAdmin'}).then(r=>{
-      if(r&&r.ok&&r.isAdmin){isAdminMode=true;updateAccessUI();paintFeatures();toast(t.saved);}
-      else{localStorage.removeItem(ADMIN_PASS_KEY);isAdminMode=false;updateAccessUI();toast(t.denied+(r&&r.error?': '+r.error:''),'error');}
+    apiPost({action:'verifyAdmin'}).then(r=>{
+      if(r&&r.ok&&r.isAdmin){isAdminMode=true;updateAccessUI();paintFeatures();toast(t.saved);}else{localStorage.removeItem(ADMIN_PASS_KEY);isAdminMode=false;updateAccessUI();toast(t.denied,'error');}
     }).catch(()=>{localStorage.removeItem(ADMIN_PASS_KEY);isAdminMode=false;updateAccessUI();toast(t.denied,'error');});
   }else{isAdminMode=true;updateAccessUI();paintFeatures();toast(t.saved);}
 }
@@ -2051,9 +2018,8 @@ function skeletonCards(n,cls){return Array(n).fill(`<div class="skeleton ${cls}"
    ==================================================================== */
 function boot(){
   (function(){const os=document.getElementById('overallSection'),cs=document.getElementById('completionSection');if(os&&cs&&os.parentNode&&os.previousElementSibling!==cs)os.parentNode.insertBefore(cs,os);})();
-  if(USE_SHEET){mode='online';loadOnline(true).then(()=>verifyStoredAdmin());return;}
-  loadOffline();
-  verifyStoredAdmin();              // embedded matrix is the working source; changes saved locally
+  if(USE_SHEET){mode='online';loadOnline(true);return;}
+  loadOffline();              // embedded matrix is the working source; changes saved locally
 }
 function normalizeMains(raw){
   const mains=(raw||[]).map(m=>{
@@ -2091,15 +2057,7 @@ function loadOnline(initial){
       if(!f||!f.ok||!Array.isArray(f.mainFeatures))throw new Error('bad features');
 
       DATA.mains=normalizeMains(f.mainFeatures);
-      DATA.activity=(a&&a.activity)?a.activity.map(x=>({
-        id:x.activityId,
-        fid:x.featureId,
-        type:x.activityType,
-        oldStatus:x.oldStatus,
-        newStatus:x.newStatus,
-        date:x.date,
-        time:x.time
-      })):[];
+      DATA.activity=(a&&a.activity)?normalizeActivityList(a.activity):[];
 
       DATA.notes={};
       if(n&&n.ok&&Array.isArray(n.notes)){
@@ -2412,21 +2370,26 @@ function saveFeatureDetails(){
   const noChange=prev.arabicName===arabicName&&prev.englishName===englishName&&prev.phase===phase&&prev.priority===priority&&prev.status===status;
   if(noChange){closeFeatureEditModal();return;}
   const btn=document.getElementById('featureEditSaveBtn');if(btn)btn.disabled=true;
+  const keepScroll=window.scrollY;
   showSaveIndicator('saving');
   const apply=()=>{s.arabicName=arabicName;s.englishName=englishName;s.phase=phase;s.priority=priority;s.status=status;s.isHidden=(status==='Not Used');const n=today();s.lastUpdatedDate=n.date;s.lastUpdatedTime=n.time;DATA.mains.forEach(m=>recomputeMain(m));};
   const restore=()=>{s.arabicName=prev.arabicName;s.englishName=prev.englishName;s.phase=prev.phase;s.priority=prev.priority;s.status=prev.status;s.isHidden=(prev.status==='Not Used');DATA.mains.forEach(m=>recomputeMain(m));};
-  const refreshAfterLocal=()=>{if(btn)btn.disabled=false;closeFeatureEditModal();buildFilters();paintFeatures();renderMainDashboard(false);renderDashboard(false);setTimeout(()=>{const row=document.getElementById('sub-'+cssId(id));markRowEdited(row);},80);};
-
-  // Optimistic screen update, but do NOT show Saved until Google Sheet confirms.
-  apply();refreshAfterLocal();showSaveIndicator('saving');
+  apply();closeFeatureEditModal();
+  const row=document.getElementById('sub-'+cssId(id));
+  if(row){
+    const txt=row.querySelector('.sub-name-text');if(txt)txt.textContent=nameOf(s);
+    const inp=row.querySelector('.sub-name-input');if(inp)inp.value=nameOf(s);
+    paintRowMeta(s,null,false);paintRowStatus(s,false);setRowUpdatedLabel(s);markRowEdited(row);
+  }
+  renderMainDashboard(false);renderDashboard(false);setTimeout(()=>window.scrollTo({top:keepScroll,left:0,behavior:'auto'}),0);
+  const finish=()=>{if(btn)btn.disabled=false;showSaveIndicator('saved');toast(tr('saved'),'note');};
+  const fail=(err)=>{restore();if(btn)btn.disabled=false;paintFeatures();setTimeout(()=>window.scrollTo({top:keepScroll,left:0,behavior:'auto'}),0);showSaveIndicator('failed');toast((tr('saveFailed'))+(err?': '+err:''),'error');};
   if(mode==='online'){
-    apiPost({action:'updateFeatureDetails',featureId:id,arabicName,englishName,phase,priority,status})
-      .then(()=>{showSaveIndicator('saved');toast(tr('saved'),'note');refreshActivity();})
-      .catch((e)=>{restore();buildFilters();paintFeatures();renderMainDashboard(false);renderDashboard(false);showSaveIndicator('failed');toast((lang==='ar'?'تعذّر الحفظ: ':'Save failed: ')+(e&&e.message?e.message:''),'error');});
+    serverSave({type:'details',featureId:id,arabicName,englishName,phase,priority,status})
+      .then(r=>{const res=(r.results||[])[0]||{};if(res.lastUpdatedDate){s.lastUpdatedDate=res.lastUpdatedDate;s.lastUpdatedTime=res.lastUpdatedTime;setRowUpdatedLabel(s);}finish();})
+      .catch(e=>fail(e&&e.message));
   }else{
-    const n=today();
-    DATA.activity.unshift({id:'A'+String(DATA.activity.length+1).padStart(4,'0'),fid:id,type:'Feature Details Change',oldStatus:prev.status,newStatus:status,date:n.date,time:n.time});
-    persistOffline();showSaveIndicator('saved');toast(tr('saved'),'note');
+    const n=today();DATA.activity.unshift({id:'A'+String(DATA.activity.length+1).padStart(4,'0'),fid:id,type:'Feature Details Change',oldStatus:prev.status,newStatus:status,date:n.date,time:n.time});persistOffline();finish();
   }
 }
 
@@ -2570,19 +2533,21 @@ function updateSubName(subId,value){
   const field=(lang==='ar')?'arabicName':'englishName';
   const prev=s[field]||'';
   value=String(value||'').trim();
-  if(!value){paintFeatures();return;}
+  if(!value){const row=document.getElementById('sub-'+cssId(subId));const inp=row&&row.querySelector('.sub-name-input');if(inp)inp.value=prev;return;}
   if(prev===value)return;
+  const keepScroll=window.scrollY;
   s[field]=value;
   const row=document.getElementById('sub-'+cssId(subId));
-  markRowEdited(row);showSaveIndicator('saving');
-  const rollback=(e)=>{s[field]=prev;paintFeatures();showSaveIndicator('failed');toast((lang==='ar'?'تعذّر الحفظ: ':'Save failed: ')+(e&&e.message?e.message:''),'error');};
-  const done=()=>{const n=today();s.lastUpdatedDate=n.date;s.lastUpdatedTime=n.time;setRowUpdatedLabel(s);showSaveIndicator('saved');toast(tr('saved'),'note');paintFeatures();refreshActivity();};
+  if(row){const txt=row.querySelector('.sub-name-text');if(txt)txt.textContent=nameOf(s);const inp=row.querySelector('.sub-name-input');if(inp)inp.value=nameOf(s);markRowEdited(row);}
+  showSaveIndicator('saving');
+  const rollback=(err)=>{s[field]=prev;const r=document.getElementById('sub-'+cssId(subId));if(r){const txt=r.querySelector('.sub-name-text');if(txt)txt.textContent=nameOf(s);const inp=r.querySelector('.sub-name-input');if(inp)inp.value=nameOf(s);}window.scrollTo({top:keepScroll,left:0,behavior:'auto'});showSaveIndicator('failed');toast((tr('saveFailed'))+(err?': '+err:''),'error');};
+  const done=(res)=>{const n=res||today();s.lastUpdatedDate=n.lastUpdatedDate||n.date;s.lastUpdatedTime=n.lastUpdatedTime||n.time;setRowUpdatedLabel(s);showSaveIndicator('saved');toast(tr('saved'),'note');};
   if(mode==='online'){
-    apiPost({action:'updateFeatureMeta',featureId:subId,field:field,value:value})
-      .then(r=>{if(!r||!(r.ok||r.success||r.saved))throw new Error((r&&r.error)||'Update failed');done();})
-      .catch(rollback);
+    serverSave({type:'meta',featureId:subId,field:field,value:value})
+      .then(r=>done((r.results||[])[0]||r))
+      .catch(e=>rollback(e&&e.message));
   }else{
-    const n=today();DATA.activity.unshift({id:'A'+String(DATA.activity.length+1).padStart(4,'0'),fid:subId,type:'Name Change',oldStatus:prev,newStatus:value,date:n.date,time:n.time});persistOffline();done();
+    const n=today();DATA.activity.unshift({id:'A'+String(DATA.activity.length+1).padStart(4,'0'),fid:subId,type:'Name Change',oldStatus:prev,newStatus:value,date:n.date,time:n.time});persistOffline();done(n);
   }
 }
 
@@ -2598,15 +2563,15 @@ function updateSubMeta(subId,field,value){
   const row=document.getElementById('sub-'+cssId(subId));markRowEdited(row);
   showSaveIndicator('saving');
   const action=field==='phase'?'Phase Change':'Priority Change';
-  const rollback=(e)=>{s[field]=prev;paintRowMeta(s,field,false);showSaveIndicator('failed');toast((lang==='ar'?'تعذّر الحفظ: ':'Save failed: ')+(e&&e.message?e.message:''),'error');};
-  const done=()=>{const n=today();s.lastUpdatedDate=n.date;s.lastUpdatedTime=n.time;setRowUpdatedLabel(s);paintRowMeta(s,field,false);showSaveIndicator('saved');toast(tr('saved'),'note');if(parent)updateParentCard(parent);buildFilters();refreshActivity();};
+  const rollback=(err)=>{s[field]=prev;paintRowMeta(s,field,false);showSaveIndicator('failed');toast((tr('saveFailed'))+(err?': '+err:''),'error');};
+  const done=(res)=>{const n=res||today();s.lastUpdatedDate=n.lastUpdatedDate||n.date;s.lastUpdatedTime=n.lastUpdatedTime||n.time;setRowUpdatedLabel(s);paintRowMeta(s,field,false);showSaveIndicator('saved');toast(tr('saved'),'note');if(parent)updateParentCard(parent);buildFilters();};
   if(mode==='online'){
-    apiPost({action:'updateFeatureMeta',featureId:subId,field:field,value:value||''})
-      .then(r=>{if(!r||!(r.ok||r.success||r.saved))throw new Error((r&&r.error)||'Update failed');done();})
-      .catch(rollback);
+    serverSave({type:'meta',featureId:subId,field:field,value:value||''})
+      .then(r=>done((r.results||[])[0]||r))
+      .catch(e=>rollback(e&&e.message));
   }else{
     const n=today();DATA.activity.unshift({id:'A'+String(DATA.activity.length+1).padStart(4,'0'),fid:subId,type:action,oldStatus:prev,newStatus:value||'',date:n.date,time:n.time});
-    persistOffline();done();
+    persistOffline();done(n);
   }
 }
 
@@ -2622,18 +2587,19 @@ function flushStatusSaves(){
 
   if(mode==='online'){
     showSaveIndicator('saving');
-    Promise.all(batch.map(c=>
-      apiPost({action:'updateFeatureStatus',featureId:c.id,newStatus:c.next})
-        .then(r=>{if(!r||!(r.ok||r.success||r.saved))throw new Error((r&&r.error)||'Update failed');return{c,ok:true};})
-        .catch(()=>({c,ok:false}))
-    )).then(results=>{
-      const failed=results.filter(r=>!r.ok).map(r=>r.c);
-      reenable();
-      if(failed.length){
-        failed.forEach(c=>{const s=BY_ID[c.id];if(s){s.status=c.prev;s.isHidden=(c.prev==='Not Used');paintRowStatus(s,false);updateParentCard(BY_ID[c.parentId]);}});
-        showSaveIndicator('failed');
-      }else{stamp();showSaveIndicator('saved');toast(tr('saved'),'note');refreshActivity();}
-    });
+    serverSave(batch.map(c=>({type:'status',featureId:c.id,newStatus:c.next})))
+      .then(r=>{
+        reenable();
+        const failed=(r.results||[]).filter(x=>!x.ok).map(x=>batch[x.index]);
+        if(failed.length){
+          failed.forEach(c=>{const s=BY_ID[c.id];if(s){s.status=c.prev;s.isHidden=(c.prev==='Not Used');paintRowStatus(s,false);updateParentCard(BY_ID[c.parentId]);}});
+          showSaveIndicator('failed');toast(tr('saveFailed'),'error');
+        }else{stamp();showSaveIndicator('saved');toast(tr('saved'),'note');}
+      })
+      .catch(e=>{
+        reenable();batch.forEach(c=>{const s=BY_ID[c.id];if(s){s.status=c.prev;s.isHidden=(c.prev==='Not Used');paintRowStatus(s,false);updateParentCard(BY_ID[c.parentId]);}});
+        showSaveIndicator('failed');toast((tr('saveFailed'))+(e&&e.message?': '+e.message:''),'error');
+      });
     return;
   }
 
@@ -2690,38 +2656,20 @@ function renderNotesPanel(){const o=BY_ID[currentFeatureId];if(!o)return;const p
      <div class="tl-card"><div class="tl-time">${svg('calendar','icon-sm')}${nt.date?escapeHtml(String(nt.date))+(nt.time?' · '+escapeHtml(String(nt.time)):''):''}<span class="src-badge ${init?'imp':''}">${init?tr('initialReview'):tr('userNote')}</span></div>
      <div class="tl-text">${escapeHtml(nt.note)}</div></div></div>`;}).join('')+`</div>`:`<div class="no-notes">${tr('noNotes')}</div>`;}
 function saveNote(){if(!requireAdmin())return;const t=document.getElementById('noteText').value.trim();if(!t||!currentFeatureId){toast(tr('errorEmpty'),'error');return;}
-  if(mode==='online'){toast(tr('syncing'));
-    apiPost({action:'saveNote',featureId:currentFeatureId,note:t,source:'User Note'})
-      .then(r=>{if(!r||!(r.ok||r.success||r.saved))throw 0;document.getElementById('noteText').value='';return Promise.all([apiGet('getNotes',{featureId:currentFeatureId}),apiGet('getActivityLog')]);})
-      .then(([nr,ar])=>{if(nr&&nr.notes)DATA.notes[currentFeatureId]=nr.notes.map(n=>({noteId:n.noteId,featureId:currentFeatureId,date:n.date,time:n.time,source:n.source||'User Note',note:n.note||''}));
-        if(ar&&ar.activity)DATA.activity=ar.activity.map(x=>({id:x.activityId,fid:x.featureId,type:x.activityType,oldStatus:x.oldStatus,newStatus:x.newStatus,note:x.note||x.newStatus||'',date:x.date,time:x.time}));
-        renderNotesPanel();renderActivity();updateNoteCount(currentFeatureId);toast(tr('noteSaved'),'note');})
-      .catch((e)=>toast((lang==='ar'?'تعذّر حفظ الملاحظة: ':'Save failed: ')+(e&&e.message?e.message:''),'error'));
+  if(mode==='online'){
+    showSaveIndicator('saving');
+    serverSave({type:'note',featureId:currentFeatureId,note:t,source:'User Note'})
+      .then(r=>{
+        const res=(r.results||[])[0]||{};const nt=res.note;
+        if(nt){DATA.notes[currentFeatureId]=DATA.notes[currentFeatureId]||[];DATA.notes[currentFeatureId].unshift(nt);}
+        document.getElementById('noteText').value='';renderNotesPanel();updateNoteCount(currentFeatureId);showSaveIndicator('saved');toast(tr('noteSaved'),'note');
+      })
+      .catch(e=>{showSaveIndicator('failed');toast((lang==='ar'?'تعذّر حفظ الملاحظة':'Save failed')+(e&&e.message?': '+e.message:''),'error');});
     return;}
   const n=today();userNotes[currentFeatureId]=userNotes[currentFeatureId]||[];
   userNotes[currentFeatureId].unshift({noteId:'U'+Date.now(),featureId:currentFeatureId,date:n.date,time:n.time,source:'User Note',note:t});
   DATA.activity.unshift({id:'A'+String(DATA.activity.length+1).padStart(4,'0'),fid:currentFeatureId,type:'Note Added',note:t,date:n.date,time:n.time});
   persistOffline();document.getElementById('noteText').value='';renderNotesPanel();renderActivity();updateNoteCount(currentFeatureId);toast(tr('noteSaved'),'note');}
-
-/* ====================================================================
-   ACTIVITY LOG  (only real records; no demo data)
-   ==================================================================== */
-function actTs(a){return Date.parse(`${a.date} ${a.time}`)||Date.parse(a.date)||0;}
-function dateKey(s){const t=Date.parse(s);if(isNaN(t))return'';const d=new Date(t);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
-function normDigits(v){return String(v==null?'':v)
-  .replace(/[\u0660-\u0669]/g,d=>String(d.charCodeAt(0)-0x0660))
-  .replace(/[\u06F0-\u06F9]/g,d=>String(d.charCodeAt(0)-0x06F0));}
-function formatActivityDate(v){
-  const s=normDigits(v).trim();
-  if(!s)return '';
-  let m=s.match(/(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);
-  if(m){const y=m[1],mo=String(m[2]).padStart(2,'0'),d=String(m[3]).padStart(2,'0');return lang==='ar'?`${d}-${mo}-${y}`:`${y}-${mo}-${d}`;}
-  m=s.match(/(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})/);
-  if(m){const d=String(m[1]).padStart(2,'0'),mo=String(m[2]).padStart(2,'0'),y=m[3];return lang==='ar'?`${d}-${mo}-${y}`:`${y}-${mo}-${d}`;}
-  const t=Date.parse(s);
-  if(!isNaN(t)){const dt=new Date(t),p=n=>String(n).padStart(2,'0');return lang==='ar'?`${p(dt.getDate())}-${p(dt.getMonth()+1)}-${dt.getFullYear()}`:`${dt.getFullYear()}-${p(dt.getMonth()+1)}-${p(dt.getDate())}`;}
-  return s;
-}
 // Keep ONLY HH:MM (+ AM/PM or ص/م if present). Drops any extra wording such as a
 // timezone name ("التوقيت الرسمي لوسط أوروبا") that may be baked into old records.
 function cleanActivityTime(v){
@@ -2733,112 +2681,30 @@ function cleanActivityTime(v){
 }
 function activityDateTime(a){const d=formatActivityDate(a.date),t=cleanActivityTime(a.time);return d&&t?`${d} · ${t}`:(d||t||'');}
 function clearActivityDate(){const d=document.getElementById('activityDate');if(d)d.value='';renderActivity();}
-function activityTypeLabel(type){
-  const t=String(type||'');
+function activityLabel(type){
   const map={
-    'Status Change': lang==='ar'?'تغيير الحالة':'Status Change',
-    'Priority Change': lang==='ar'?'تغيير الأولوية':'Priority Change',
-    'Phase Change': lang==='ar'?'تغيير المرحلة':'Phase Change',
-    'Sub Feature Name Change': lang==='ar'?'تعديل اسم الخاصية':'Feature Name Change',
-    'Name Change': lang==='ar'?'تعديل الاسم':'Name Change',
-    'Feature Details Change': lang==='ar'?'تعديل تفاصيل الخاصية':'Feature Details Change',
-    'Note Added': lang==='ar'?'إضافة ملاحظة':'Note Added',
-    'Feature Added': lang==='ar'?'إضافة خاصية':'Feature Added',
-    'Renamed': lang==='ar'?'إعادة تسمية':'Renamed',
-    'Deleted': lang==='ar'?'حذف':'Deleted',
-    'Test Write': lang==='ar'?'اختبار حفظ':'Test Write'
+    'Status Change':lang==='ar'?'تغيير الحالة':'Status Change',
+    'Priority Change':lang==='ar'?'تغيير الأولوية':'Priority Change',
+    'Phase Change':lang==='ar'?'تغيير المرحلة':'Phase Change',
+    'Arabic Name Change':lang==='ar'?'تعديل الاسم العربي':'Arabic Name Change',
+    'English Name Change':lang==='ar'?'تعديل الاسم الإنجليزي':'English Name Change',
+    'Feature Details Change':lang==='ar'?'تعديل تفاصيل الخاصية':'Feature Details Change',
+    'Note Added':lang==='ar'?'إضافة ملاحظة':'Note Added',
+    'Feature Added':lang==='ar'?'إضافة خاصية':'Feature Added',
+    'Subsection Added':lang==='ar'?'إضافة قسم فرعي':'Subsection Added',
+    'Renamed':lang==='ar'?'إعادة تسمية':'Renamed',
+    'Deleted':lang==='ar'?'حذف':'Deleted'
   };
-  return map[t] || t || (lang==='ar'?'نشاط':'Activity');
+  return map[type]||type||'';
 }
-function activityNodeIcon(type){
-  const t=String(type||'');
-  if(t==='Note Added')return 'note';
-  if(t==='Status Change')return 'activity';
-  if(t==='Priority Change')return 'tag';
-  if(t==='Phase Change')return 'phase';
-  if(t.indexOf('Name')>-1||t.indexOf('Details')>-1)return 'edit';
-  return 'activity';
-}
-function activityChangeDesc(a){
-  const type=String(a.type||'');
-  const oldVal=(a.oldStatus==null?'':String(a.oldStatus));
-  const newVal=(a.newStatus==null?'':String(a.newStatus));
-  if(type==='Note Added') return escapeHtml(a.note||newVal||'');
-  if(type==='Status Change'){
-    const so=statusMeta(oldVal),sn=statusMeta(newVal);
-    return `<span class="tl-status-chip" style="background:${so.bg};color:${so.color}">${statusText(oldVal)}</span> → <span class="tl-status-chip" style="background:${sn.bg};color:${sn.color}">${statusText(newVal)}</span>`;
-  }
-  if(oldVal||newVal){
-    const oldText=oldVal?escapeHtml(oldVal):(lang==='ar'?'فارغ':'Empty');
-    const newText=newVal?escapeHtml(newVal):(lang==='ar'?'فارغ':'Empty');
-    return `<span class="tl-status-chip" style="background:#F1F5F9;color:#64748B">${oldText}</span> → <span class="tl-status-chip" style="background:#EAF1FB;color:#1855A4">${newText}</span>`;
-  }
-  return '';
-}
-function activityTimeline(list){return `<div class="timeline">`+list.map((a,i)=>{const f=BY_ID[a.fid]||{englishName:a.fid,arabicName:''};const label=activityTypeLabel(a.type);const icon=activityNodeIcon(a.type);const desc=activityChangeDesc(a);
-  return `<div class="tl-item" style="animation-delay:${Math.min(i,12)*45}ms"><div class="tl-node ${icon==='note'?'note':''}">${svg(icon)}</div>
-    <div class="tl-card"><div class="tl-time">${svg('calendar','icon-sm')}<span dir="ltr">${escapeHtml(activityDateTime(a))}</span> · ${escapeHtml(label)}</div>
-    <div class="tl-title">${escapeHtml(nameOf(f))} <span class="fc-id">${escapeHtml(a.fid)}</span></div>${desc?`<div class="tl-desc">${desc}</div>`:''}</div></div>`;}).join('')+`</div>`;}
-function renderActivity(){
-  if(!isAdminMode){
-    const el=document.getElementById('activityList');
-    if(el)el.innerHTML='';
-    return;
-  }
-  if(mode!=='online'&&mode!=='offline')return;const el=document.getElementById('activityList');const sel=(document.getElementById('activityDate')||{}).value||'';
-  let list=[...DATA.activity].sort((a,b)=>actTs(b)-actTs(a));if(sel)list=list.filter(a=>dateKey(a.date)===sel);
-  if(!list.length){const msg=sel?tr('noActivityDate'):tr('noActivity'),sub=sel?tr('noActivityDateSub'):tr('noActivitySub');
-    el.innerHTML=`<div class="empty"><div><svg class="empty-illustration" viewBox="0 0 200 200" fill="none"><circle cx="100" cy="100" r="58" stroke="#DCE8F8" stroke-width="9"/><path d="M100 66v36l24 14" stroke="#1855A4" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/></svg><h3>${msg}</h3><p>${sub}</p></div></div>`;return;}
-  el.innerHTML=activityTimeline(list);}
-function refreshActivity(){if(!isAdminMode)return; if(mode==='online'){document.getElementById('activityList').innerHTML=skeletonCards(4,'sk-row');
-  apiGet('getActivityLog').then(r=>{if(r&&r.activity)DATA.activity=r.activity.map(x=>({id:x.activityId,fid:x.featureId,type:x.activityType,oldStatus:x.oldStatus,newStatus:x.newStatus,note:x.note||x.newStatus||'',date:x.date,time:x.time}));renderActivity();}).catch(()=>renderActivity());}
-  else renderActivity();}
-/* dev/testing only — not exposed in the UI */
-function clearActivityLog(){DATA.activity=[];if(mode==='offline')persistOffline();renderActivity();return 'Activity cleared.';}
-
-/* ====================================================================
-   TOAST
-   ==================================================================== */
-function toast(msg,kind){const wrap=document.getElementById('toasts'),el=document.createElement('div');el.className='toast '+(kind||'');el.innerHTML=`<span class="tic">${svg(kind==='error'?'x':'check')}</span><span>${msg}</span>`;wrap.appendChild(el);setTimeout(()=>{el.classList.add('out');setTimeout(()=>el.remove(),300);},2400);}
-
-function scrollToTopSmart(){window.scrollTo({top:0,behavior:'smooth'});const side=document.querySelector('.category-sidebar');if(side)side.scrollTo({top:0,behavior:'smooth'});}
-function toggleBackTop(){const b=document.getElementById('backTopBtn');if(!b)return;b.classList.toggle('show',window.scrollY>420);}
-window.addEventListener('scroll',toggleBackTop,{passive:true});
-
-
-/* ====================================================================
-   COMMAND PALETTE
-   ==================================================================== */
-function openCmd(){if(mode!=='online'&&mode!=='offline')return;const o=document.getElementById('cmdOverlay');o.classList.add('open');const inp=document.getElementById('cmdInput');inp.value='';renderCmd();setTimeout(()=>inp.focus(),60);}
-function closeCmd(){document.getElementById('cmdOverlay').classList.remove('open');}
-function cmdOutside(e){if(e.target.id==='cmdOverlay')closeCmd();}
-function buildCmdData(q){const items=[];
-  DATA.mains.forEach(m=>{if(mainNameMatch(m,q))items.push({kind:'main',ic:'folder',name:nameOf(m),meta:`${m.featureId} · ${catLabel(m.category)}`,cat:m.category,mid:m.featureId});});
-  DATA.mains.forEach(m=>subsOf(m).forEach(s=>{if(subMatch(s,q))items.push({kind:'sub',ic:'tracker',name:nameOf(s),meta:`${s.featureId} · ${statusText(s.status)}`,cat:s.category,mid:s.parentFeatureId,sid:s.featureId});}));
-  ['All Features',...catNames()].forEach(c=>{if(!q||catLabel(c).toLowerCase().includes(q)||c.toLowerCase().includes(q))items.push({kind:'category',ic:'list',name:catLabel(c),meta:`${c==='All Features'?DATA.mains.length:mainsIn(c).length} ${tr('features')}`,cat:c});});
-  return items;}
-function renderCmd(){const q=document.getElementById('cmdInput').value.toLowerCase().trim();cmdItems=buildCmdData(q);cmdIndex=0;const res=document.getElementById('cmdResults');
-  if(!cmdItems.length){res.innerHTML=`<div class="cmd-empty">${tr('cmdEmpty')}</div>`;return;}
-  const groups={main:{label:tr('cmdFeatures'),items:[]},sub:{label:tr('cmdSubs'),items:[]},category:{label:tr('cmdCategories'),items:[]}};
-  cmdItems.forEach((it,i)=>{it._i=i;groups[it.kind].items.push(it);});let html='';
-  ['main','sub','category'].forEach(g=>{const grp=groups[g];if(!grp.items.length)return;
-    html+=`<div class="cmd-group-label">${grp.label}</div>`+grp.items.slice(0,g==='sub'?20:14).map(it=>`<div class="cmd-item ${it._i===cmdIndex?'active':''}" data-i="${it._i}" onmouseenter="cmdHover(${it._i})" onclick="cmdSelect(${it._i})"><span class="cmd-ic">${svg(it.ic,'icon-sm')}</span><div class="cmd-main"><div class="cmd-name">${escapeHtml(it.name)}</div><div class="cmd-meta">${escapeHtml(it.meta)}</div></div><span class="cmd-kind">${grp.label}</span></div>`).join('');});
-  res.innerHTML=html;}
-function cmdHover(i){cmdIndex=i;document.querySelectorAll('.cmd-item').forEach(el=>el.classList.toggle('active',+el.dataset.i===i));}
-function cmdMove(d){const items=document.querySelectorAll('.cmd-item');if(!items.length)return;const ids=[...items].map(el=>+el.dataset.i);let pos=ids.indexOf(cmdIndex);pos=(pos+d+ids.length)%ids.length;cmdIndex=ids[pos];items.forEach(el=>el.classList.toggle('active',+el.dataset.i===cmdIndex));const act=[...items].find(el=>+el.dataset.i===cmdIndex);if(act&&act.scrollIntoView)act.scrollIntoView({block:'nearest'});}
-function cmdSelect(i){const it=cmdItems[i];if(!it)return;closeCmd();
-  if(it.kind==='category'){selectCategory(it.cat);return;}
-  selectedCategory=it.cat;openMainId=it.mid||null;document.querySelector('.tab-btn[data-view="trackerView"]').click();renderCategories(false);
-  setTimeout(()=>{const hit=it.sid?document.getElementById('sub-'+cssId(it.sid)):document.getElementById('main-'+cssId(it.mid));
-    if(hit){if(hit.scrollIntoView)hit.scrollIntoView({behavior:'smooth',block:'center'});hit.classList.add('flash-hit');setTimeout(()=>hit.classList.remove('flash-hit'),1400);}},520);}
-
-/* ====================================================================
-   FILTERS / i18n / VIEWS
-   ==================================================================== */
-function collapseAll(){
-  if(openMainId){const card=document.getElementById('main-'+cssId(openMainId));if(card)collapse(card,card.querySelector('.exec-body'));}
-  openMainId=null;
-}
+function activityTimeline(list){return `<div class="timeline">`+list.map((a,i)=>{const f=BY_ID[a.fid]||{englishName:a.fid,arabicName:''};const isStatus=a.type==='Status Change';let desc='';
+  if(isStatus){const so=statusMeta(a.oldStatus),sn=statusMeta(a.newStatus);desc=`<span class="tl-status-chip" style="background:${so.bg};color:${so.color}">${statusText(a.oldStatus)}</span> → <span class="tl-status-chip" style="background:${sn.bg};color:${sn.color}">${statusText(a.newStatus)}</span>`;}
+  else if(a.oldStatus||a.newStatus){desc=`<span class="tl-status-chip" style="background:var(--neutral-bg);color:var(--neutral)">${escapeHtml(a.oldStatus||'—')}</span> → <span class="tl-status-chip" style="background:var(--primary-soft);color:var(--primary)">${escapeHtml(a.newStatus||'—')}</span>`;}
+  else desc=escapeHtml(a.note||'');
+  const nodeIcon=isStatus?'activity':(a.type==='Note Added'?'note':(a.type==='Deleted'?'trash':'check'));
+  return `<div class="tl-item" style="animation-delay:${Math.min(i,12)*45}ms"><div class="tl-node ${isStatus?'':'note'}">${svg(nodeIcon)}</div>
+    <div class="tl-card"><div class="tl-time">${svg('calendar','icon-sm')}<span dir="ltr">${escapeHtml(activityDateTime(a))}</span> · ${escapeHtml(activityLabel(a.type))}</div>
+    <div class="tl-title">${escapeHtml(nameOf(f))} <span class="fc-id">${escapeHtml(a.fid)}</span></div><div class="tl-desc">${desc}</div></div></div>`;}).join('')+`</div>`;}
 function clearFilters(){
   const q=document.getElementById('searchInput');if(q)q.value='';
   ['phaseFilter','priorityFilter','statusFilter'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='All';});
@@ -2998,7 +2864,7 @@ function clearLocalData(){
       :('Clear '+nMains+' main feature(s) and '+nSubs+' detail(s) added on this device (not saved to the Sheet)?\nSheet data is unaffected.')))return;
   try{localStorage.removeItem('ah_added_mains_v1');localStorage.removeItem('ah_added_subs_v1');}catch(e){}
   toast(lang==='ar'?'تم مسح البيانات المحلية':'Local data cleared','check');
-  if(mode==='online'&&USE_SHEET)refreshAll(); else location.reload();
+  if(mode==='online'&&USE_SHEET){amAfterChange();} else {renderShell();}
 }
 function buildAddSpecs(cat,mainName,mainNameAr,rows){
   return rows.map(d=>({
@@ -3010,20 +2876,20 @@ function buildAddSpecs(cat,mainName,mainNameAr,rows){
 }
 function pushAddedToSheet(specs,onResult){
   if(mode!=='online'||!USE_SHEET||!specs||!specs.length){if(onResult)onResult(false,'offline');return;}
-  let ok=true,err='';
-  // Sequential to respect the server-side LockService and keep ordering stable.
-  specs.reduce((p,sp)=>p.then(()=>apiPost(sp)
-      .then(r=>{if(!(r&&r.ok)){ok=false;if(!err)err=(r&&r.error)||'unknown';}})
-      .catch(e=>{ok=false;if(!err)err=String((e&&e.message)||e);})),Promise.resolve())
-    .then(()=>{if(onResult)onResult(ok,err);});
+  showSaveIndicator('saving');
+  serverSave(specs.map(sp=>({...sp,type:'addFeature'})))
+    .then(r=>{if(onResult)onResult(true,'',r);})
+    .catch(e=>{if(onResult)onResult(false,String((e&&e.message)||e));});
 }
 function afterSheetWrite(ok,err,onSuccessLocalCleanup){
-  if(mode!=='online'||!USE_SHEET)return;            // offline: nothing to report
+  if(mode!=='online'||!USE_SHEET)return;
   if(ok){
     if(onSuccessLocalCleanup)onSuccessLocalCleanup();
+    showSaveIndicator('saved');
     toast(tr('amSheetSynced'),'check');
-    if(typeof refreshAll==='function')refreshAll();   // re-pull from the sheet so the UI shows the saved rows
+    renderCategories(false);renderMainDashboard(false);const active=document.querySelector('.view.active');if(active&&active.id==='dashboardView')renderDashboard(false);if(active&&active.id==='trackerView')paintFeatures();
   }else{
+    showSaveIndicator('failed');
     toast(tr('amSheetFailed')+(err?(': '+err):''),'error');
   }
 }
@@ -3367,7 +3233,7 @@ function amRename(level,gid){
   toast(amT('جارٍ التعديل…','Renaming…'),'pdf');
   if(mode==='online'&&USE_SHEET){
     apiPost(payload).then(r=>{
-      if(r&&r.ok){toast(amT('تم التعديل ومزامنته','Renamed & synced'),'check');closeAddMain();refreshAll();}
+      if(r&&r.ok){toast(amT('تم التعديل ومزامنته','Renamed & synced'),'check');closeAddMain();amAfterChange();refreshActivity();}
       else{toast(amT('عُدّل محليًا، لكن تعذّرت المزامنة','Renamed locally, sync failed')+(r&&r.error?': '+r.error:''),'error');closeAddMain();amAfterChange();}
     }).catch(e=>{toast(amT('عُدّل محليًا، وتعذّر الاتصال','Renamed locally, connection failed'),'error');closeAddMain();amAfterChange();});
   }else{toast(amT('تم التعديل','Renamed'),'check');closeAddMain();amAfterChange();}
@@ -3416,7 +3282,7 @@ function amDelete(level,gid){
   if(mode==='online'&&USE_SHEET){
     toast(amT('جارٍ الحذف والمزامنة…','Deleting & syncing…'),'pdf');
     apiPost(payload).then(r=>{
-      if(r&&r.ok){toast(amT('تم الحذف ومزامنته','Deleted & synced'),'check');closeAddMain();refreshAll();}
+      if(r&&r.ok){toast(amT('تم الحذف ومزامنته','Deleted & synced'),'check');closeAddMain();amAfterChange();refreshActivity();}
       else{toast(amT('حُذف محليًا، لكن تعذّرت المزامنة','Removed locally, sync failed')+(r&&r.error?': '+r.error:''),'error');closeAddMain();}
     }).catch(e=>{toast(amT('حُذف محليًا، وتعذّر الاتصال بالشيت','Removed locally, connection failed'),'error');closeAddMain();});
   }else{
@@ -3471,7 +3337,6 @@ function exportExcel(){
    INIT
    ==================================================================== */
 syncSidebarVisibility();
-verifyStoredAdmin;
 boot();
 setTimeout(()=>{updateAccessUI();syncSidebarVisibility();},80);
 
