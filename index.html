@@ -1537,276 +1537,160 @@ body.ar #phaseBreakdown .kpi-cell,
 
 
 /* =========================================================
-   Dashboard Statistics Layout Fix — 3 x 2 Cards
-   ترتيب بطاقات الإحصائيات 3 فوق و3 تحت + تحسين الألوان
+   NUHA FINAL FIX — Phase dashboard KPI cards as WHITE cards
+   الهدف: بطاقات Dashboard المراحل تكون بيضاء مثل باقي البطاقات
    ========================================================= */
-.status-card-grid,
-.category-summary,
-.stats-grid,
-.summary-grid {
-  display: grid !important;
-  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-  gap: 22px !important;
-  align-items: stretch !important;
-}
-
-.status-card,
-.stat-card,
-.summary-card,
-.cs-card {
-  min-height: 210px !important;
-  border-radius: 22px !important;
-  background: #ffffff !important;
-  border: 1px solid #D9E2F1 !important;
-  box-shadow: 0 8px 24px rgba(24, 85, 164, 0.10) !important;
-  overflow: hidden !important;
-}
-
-.status-card .status-percent,
-.stat-card .status-percent,
-.summary-card .status-percent,
-.cs-card .cs-val,
-.status-card .kpi-val,
-.stat-card .kpi-val,
-.summary-card .kpi-val {
-  color: #1855A4 !important;
-  font-weight: 900 !important;
-}
-
-/* إجمالي الخصائص الرئيسية */
-.status-card.total .status-percent,
-.stat-card.total .status-percent,
-.summary-card.total .status-percent,
-.cs-card.total .cs-val,
-.status-card[data-type="total"] .status-percent,
-.stat-card[data-type="total"] .status-percent {
-  color: #1855A4 !important;
-}
-
-/* نسبة الإنجاز */
-.status-card.completion .status-percent,
-.stat-card.completion .status-percent,
-.summary-card.completion .status-percent,
-.cs-card.completion .cs-val,
-.status-card[data-type="completion"] .status-percent,
-.stat-card[data-type="completion"] .status-percent {
-  color: #1855A4 !important;
-}
-
-/* متوفر */
-.status-card[data-status="Available"] .status-percent,
-.stat-card.available .status-percent,
-.summary-card.available .status-percent,
-.cs-card.available .cs-val {
-  color: #22C55E !important;
-}
-
-/* متوفر جزئياً */
-.status-card[data-status="Partially Available"] .status-percent,
-.stat-card.partial .status-percent,
-.summary-card.partial .status-percent,
-.cs-card.partial .cs-val {
-  color: #F59E0B !important;
-}
-
-/* غير متوفر */
-.status-card[data-status="Not Available"] .status-percent,
-.stat-card.not-available .status-percent,
-.summary-card.not-available .status-percent,
-.cs-card.not-available .cs-val {
-  color: #DC2626 !important;
-}
-
-/* غير متحقق */
-.status-card[data-status="Not Verified"] .status-percent,
-.stat-card.not-verified .status-percent,
-.summary-card.not-verified .status-percent,
-.cs-card.not-verified .cs-val {
-  color: #64748B !important;
-}
-
-.status-track,
-.progress-track,
-.completion-bar,
-.exec-comp-track {
-  height: 10px !important;
-  background: #EEF2F8 !important;
-  border-radius: 999px !important;
-  overflow: hidden !important;
-}
-
-.status-fill,
-.progress-fill,
-.completion-fill,
-.exec-comp-track span {
-  border-radius: 999px !important;
-}
-
-@media (max-width: 1100px) {
-  .status-card-grid,
-  .category-summary,
-  .stats-grid,
-  .summary-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-  }
-}
-
-@media (max-width: 640px) {
-  .status-card-grid,
-  .category-summary,
-  .stats-grid,
-  .summary-grid {
-    grid-template-columns: 1fr !important;
-  }
-}
-
-
-
-/* =========================================================
-   Dashboard Details Cards — White Centered Text
-   لوحة التحكم > التفاصيل: بطاقات بيضاء النص في المنتصف
-   ========================================================= */
-#dashboardView #phaseBreakdown .kpi-grid,
-#mainDashboardView #mainPhaseBreakdown .kpi-grid,
-#dashboardView .breakdown-wrap .kpi-grid,
-#mainDashboardView .breakdown-wrap .kpi-grid{
+#phaseBreakdown .kpi-grid,
+#mainPhaseBreakdown .kpi-grid{
   display:grid !important;
-  grid-template-columns:repeat(3,minmax(0,1fr)) !important;
-  gap:22px !important;
+  grid-template-columns:repeat(auto-fit,minmax(150px,1fr)) !important;
+  gap:16px !important;
   align-items:stretch !important;
 }
 
-#dashboardView #phaseBreakdown .kpi-cell,
-#mainDashboardView #mainPhaseBreakdown .kpi-cell,
-#dashboardView .breakdown-wrap .kpi-cell,
-#mainDashboardView .breakdown-wrap .kpi-cell{
-  min-height:210px !important;
-  padding:24px 18px !important;
-  border-radius:22px !important;
-  border:1px solid rgba(255,255,255,.24) !important;
-  background:linear-gradient(135deg,var(--kc,#1855A4),color-mix(in srgb,var(--kc,#1855A4) 72%,#ffffff)) !important;
-  box-shadow:0 12px 30px rgba(24,85,164,.16) !important;
-  color:#ffffff !important;
+#phaseBreakdown .kpi-cell,
+#mainPhaseBreakdown .kpi-cell{
+  position:relative !important;
+  inset:auto !important;
+  width:auto !important;
+  height:auto !important;
+  min-height:150px !important;
+  background:#FFFFFF !important;
+  color:var(--text) !important;
+  border:1px solid var(--border) !important;
+  border-radius:var(--r-lg) !important;
+  box-shadow:var(--shadow-sm) !important;
+  padding:18px 16px !important;
+  overflow:hidden !important;
   display:flex !important;
   flex-direction:column !important;
-  justify-content:center !important;
-  align-items:center !important;
+  justify-content:space-between !important;
   text-align:center !important;
-  overflow:hidden !important;
+  transform:none !important;
 }
 
-#dashboardView #phaseBreakdown .kpi-cell::before,
-#mainDashboardView #mainPhaseBreakdown .kpi-cell::before,
-#dashboardView .breakdown-wrap .kpi-cell::before,
-#mainDashboardView .breakdown-wrap .kpi-cell::before{
+#phaseBreakdown .kpi-cell:hover,
+#mainPhaseBreakdown .kpi-cell:hover{
+  transform:translateY(-3px) !important;
+  box-shadow:var(--shadow-md) !important;
+  border-color:color-mix(in srgb,var(--kc,var(--primary)) 38%,var(--border)) !important;
+}
+
+#phaseBreakdown .kpi-cell::before,
+#mainPhaseBreakdown .kpi-cell::before{
   content:"" !important;
   position:absolute !important;
-  inset:0 0 auto 0 !important;
+  top:0 !important;
+  left:0 !important;
+  right:0 !important;
+  bottom:auto !important;
   width:100% !important;
-  height:7px !important;
-  background:rgba(255,255,255,.72) !important;
+  height:5px !important;
+  background:var(--kc,var(--primary)) !important;
+  border-radius:0 !important;
 }
 
-#dashboardView #phaseBreakdown .kpi-label,
-#mainDashboardView #mainPhaseBreakdown .kpi-label,
-#dashboardView .breakdown-wrap .kpi-label,
-#mainDashboardView .breakdown-wrap .kpi-label{
-  color:#ffffff !important;
-  font-size:13px !important;
-  font-weight:900 !important;
-  letter-spacing:0 !important;
+body.ar #phaseBreakdown .kpi-cell::before,
+body.ar #mainPhaseBreakdown .kpi-cell::before{
+  left:0 !important;
+  right:0 !important;
+}
+
+#phaseBreakdown .kpi-label,
+#mainPhaseBreakdown .kpi-label{
+  color:var(--text) !important;
+  font-size:12px !important;
+  font-weight:850 !important;
   text-transform:none !important;
-  line-height:1.45 !important;
-  margin:0 0 22px !important;
-  opacity:.98 !important;
+  letter-spacing:0 !important;
+  line-height:1.35 !important;
+  min-height:32px !important;
+  display:flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  text-align:center !important;
 }
 
-#dashboardView #phaseBreakdown .kpi-val,
-#mainDashboardView #mainPhaseBreakdown .kpi-val,
-#dashboardView .breakdown-wrap .kpi-val,
-#mainDashboardView .breakdown-wrap .kpi-val,
-#dashboardView #phaseBreakdown .kpi-percent,
-#mainDashboardView #mainPhaseBreakdown .kpi-percent,
-#dashboardView .breakdown-wrap .kpi-percent,
-#mainDashboardView .breakdown-wrap .kpi-percent{
-  color:#ffffff !important;
-  -webkit-text-fill-color:#ffffff !important;
-  font-size:44px !important;
-  font-weight:950 !important;
+#phaseBreakdown .kpi-val,
+#mainPhaseBreakdown .kpi-val,
+#phaseBreakdown .kpi-percent,
+#mainPhaseBreakdown .kpi-percent{
+  color:var(--kc,var(--primary)) !important;
+  font-size:42px !important;
   line-height:1 !important;
-  margin:0 !important;
+  font-weight:950 !important;
+  letter-spacing:-.04em !important;
+  margin-top:8px !important;
+  display:flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  text-align:center !important;
 }
 
-#dashboardView #phaseBreakdown .kpi-val small,
-#mainDashboardView #mainPhaseBreakdown .kpi-val small,
-#dashboardView .breakdown-wrap .kpi-val small,
-#mainDashboardView .breakdown-wrap .kpi-val small,
-#dashboardView #phaseBreakdown .kpi-percent small,
-#mainDashboardView #mainPhaseBreakdown .kpi-percent small,
-#dashboardView .breakdown-wrap .kpi-percent small,
-#mainDashboardView .breakdown-wrap .kpi-percent small{
-  color:#ffffff !important;
-  -webkit-text-fill-color:#ffffff !important;
-  font-size:20px !important;
-  font-weight:900 !important;
+#phaseBreakdown .kpi-val small,
+#mainPhaseBreakdown .kpi-val small,
+#phaseBreakdown .kpi-percent small,
+#mainPhaseBreakdown .kpi-percent small{
+  color:var(--kc,var(--primary)) !important;
+  font-size:18px !important;
+  font-weight:850 !important;
+  margin-inline-start:2px !important;
 }
 
-#dashboardView #phaseBreakdown .kpi-count,
-#mainDashboardView #mainPhaseBreakdown .kpi-count,
-#dashboardView .breakdown-wrap .kpi-count,
-#mainDashboardView .breakdown-wrap .kpi-count{
-  color:rgba(255,255,255,.82) !important;
-  -webkit-text-fill-color:rgba(255,255,255,.82) !important;
+#phaseBreakdown .kpi-val.sm,
+#mainPhaseBreakdown .kpi-val.sm{
+  font-size:22px !important;
+  color:var(--primary-dark) !important;
+  letter-spacing:0 !important;
+}
+
+#phaseBreakdown .kpi-count,
+#mainPhaseBreakdown .kpi-count{
+  margin-top:10px !important;
   font-size:13px !important;
   font-weight:850 !important;
-  margin-top:22px !important;
+  color:#94A3B8 !important;
+  direction:ltr !important;
+  unicode-bidi:isolate !important;
+  text-align:center !important;
 }
 
-#dashboardView #phaseBreakdown .kpi-track,
-#mainDashboardView #mainPhaseBreakdown .kpi-track,
-#dashboardView .breakdown-wrap .kpi-track,
-#mainDashboardView .breakdown-wrap .kpi-track{
+#phaseBreakdown .kpi-track,
+#mainPhaseBreakdown .kpi-track,
+#phaseBreakdown .status-track,
+#mainPhaseBreakdown .status-track{
   width:100% !important;
-  height:10px !important;
-  margin-top:24px !important;
-  background:rgba(255,255,255,.33) !important;
+  height:9px !important;
   border-radius:999px !important;
+  background:var(--neutral-bg) !important;
   overflow:hidden !important;
-  box-shadow:none !important;
+  margin-top:14px !important;
+  box-shadow:inset 0 1px 2px rgba(15,23,42,.05) !important;
 }
 
-#dashboardView #phaseBreakdown .kpi-fill,
-#mainDashboardView #mainPhaseBreakdown .kpi-fill,
-#dashboardView .breakdown-wrap .kpi-fill,
-#mainDashboardView .breakdown-wrap .kpi-fill{
+#phaseBreakdown .kpi-fill,
+#mainPhaseBreakdown .kpi-fill,
+#phaseBreakdown .status-fill,
+#mainPhaseBreakdown .status-fill{
   height:100% !important;
   border-radius:999px !important;
-  background:rgba(255,255,255,.90) !important;
-  box-shadow:0 0 14px rgba(255,255,255,.28) !important;
+  background:linear-gradient(90deg,var(--kc,var(--primary)),color-mix(in srgb,var(--kc,var(--primary)) 55%,#fff)) !important;
 }
 
-/* إجمالي الخصائص / خصائص ضمن المرحلة: لون أزرق هادئ بدل الرمادي الفاتح */
-#dashboardView .breakdown-wrap .kpi-cell[style*="#7499C8"],
-#mainDashboardView .breakdown-wrap .kpi-cell[style*="#7499C8"]{
-  background:linear-gradient(135deg,#1855A4,#7499C8) !important;
+#phaseBreakdown .acc-bar,
+#mainPhaseBreakdown .acc-bar{
+  display:none !important;
 }
 
-@media(max-width:1100px){
-  #dashboardView #phaseBreakdown .kpi-grid,
-  #mainDashboardView #mainPhaseBreakdown .kpi-grid,
-  #dashboardView .breakdown-wrap .kpi-grid,
-  #mainDashboardView .breakdown-wrap .kpi-grid{
-    grid-template-columns:repeat(2,minmax(0,1fr)) !important;
-  }
+@media(max-width:900px){
+  #phaseBreakdown .kpi-grid,
+  #mainPhaseBreakdown .kpi-grid{grid-template-columns:repeat(2,minmax(140px,1fr)) !important;}
 }
-@media(max-width:640px){
-  #dashboardView #phaseBreakdown .kpi-grid,
-  #mainDashboardView #mainPhaseBreakdown .kpi-grid,
-  #dashboardView .breakdown-wrap .kpi-grid,
-  #mainDashboardView .breakdown-wrap .kpi-grid{
-    grid-template-columns:1fr !important;
-  }
+@media(max-width:520px){
+  #phaseBreakdown .kpi-grid,
+  #mainPhaseBreakdown .kpi-grid{grid-template-columns:1fr !important;}
 }
+
 </style>
 </head>
 <body>
