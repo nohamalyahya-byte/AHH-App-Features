@@ -1534,6 +1534,132 @@ body.ar #phaseBreakdown .kpi-cell,
   #mainPhaseBreakdown .kpi-fill{width:var(--pdf-w,0%) !important;min-width:2px !important;}
 }
 
+
+
+/* =========================================================
+   Dashboard Statistics Layout Fix — 3 x 2 Cards
+   ترتيب بطاقات الإحصائيات 3 فوق و3 تحت + تحسين الألوان
+   ========================================================= */
+.status-card-grid,
+.category-summary,
+.stats-grid,
+.summary-grid {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 22px !important;
+  align-items: stretch !important;
+}
+
+.status-card,
+.stat-card,
+.summary-card,
+.cs-card {
+  min-height: 210px !important;
+  border-radius: 22px !important;
+  background: #ffffff !important;
+  border: 1px solid #D9E2F1 !important;
+  box-shadow: 0 8px 24px rgba(24, 85, 164, 0.10) !important;
+  overflow: hidden !important;
+}
+
+.status-card .status-percent,
+.stat-card .status-percent,
+.summary-card .status-percent,
+.cs-card .cs-val,
+.status-card .kpi-val,
+.stat-card .kpi-val,
+.summary-card .kpi-val {
+  color: #1855A4 !important;
+  font-weight: 900 !important;
+}
+
+/* إجمالي الخصائص الرئيسية */
+.status-card.total .status-percent,
+.stat-card.total .status-percent,
+.summary-card.total .status-percent,
+.cs-card.total .cs-val,
+.status-card[data-type="total"] .status-percent,
+.stat-card[data-type="total"] .status-percent {
+  color: #1855A4 !important;
+}
+
+/* نسبة الإنجاز */
+.status-card.completion .status-percent,
+.stat-card.completion .status-percent,
+.summary-card.completion .status-percent,
+.cs-card.completion .cs-val,
+.status-card[data-type="completion"] .status-percent,
+.stat-card[data-type="completion"] .status-percent {
+  color: #1855A4 !important;
+}
+
+/* متوفر */
+.status-card[data-status="Available"] .status-percent,
+.stat-card.available .status-percent,
+.summary-card.available .status-percent,
+.cs-card.available .cs-val {
+  color: #22C55E !important;
+}
+
+/* متوفر جزئياً */
+.status-card[data-status="Partially Available"] .status-percent,
+.stat-card.partial .status-percent,
+.summary-card.partial .status-percent,
+.cs-card.partial .cs-val {
+  color: #F59E0B !important;
+}
+
+/* غير متوفر */
+.status-card[data-status="Not Available"] .status-percent,
+.stat-card.not-available .status-percent,
+.summary-card.not-available .status-percent,
+.cs-card.not-available .cs-val {
+  color: #DC2626 !important;
+}
+
+/* غير متحقق */
+.status-card[data-status="Not Verified"] .status-percent,
+.stat-card.not-verified .status-percent,
+.summary-card.not-verified .status-percent,
+.cs-card.not-verified .cs-val {
+  color: #64748B !important;
+}
+
+.status-track,
+.progress-track,
+.completion-bar,
+.exec-comp-track {
+  height: 10px !important;
+  background: #EEF2F8 !important;
+  border-radius: 999px !important;
+  overflow: hidden !important;
+}
+
+.status-fill,
+.progress-fill,
+.completion-fill,
+.exec-comp-track span {
+  border-radius: 999px !important;
+}
+
+@media (max-width: 1100px) {
+  .status-card-grid,
+  .category-summary,
+  .stats-grid,
+  .summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .status-card-grid,
+  .category-summary,
+  .stats-grid,
+  .summary-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
 </style>
 </head>
 <body>
