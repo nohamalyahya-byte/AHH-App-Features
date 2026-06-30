@@ -1894,44 +1894,98 @@ function normalizeActivityList(activity){
 function applyServerActivity(r){
   if(r&&Array.isArray(r.activity)){DATA.activity=normalizeActivityList(r.activity);renderActivity();}
 }
-let __saveChain = Promise.resolve();
-let __saveBatchOps = [];
-let __saveBatchJobs = [];
-let __saveBatchTimer = null;
-const SAVE_QUEUE_DEBOUNCE_MS = 450;
-const SAVE_QUEUE_MAX_OPS = 30;
 function __sleep(ms){return new Promise(resolve=>setTimeout(resolve,ms));}
+function legacySaveOne(op){
+  op=op||{};
+  const type=String(op.type||op.kind||op.action||'').trim();
+  if(type==='status'||type==='updateStatus'||type==='updateFeatureStatus'){
+    return apiPost({action:'updateFeatureStatus',featureId:op.featureId||op.id,newStatus:op.newStatus||op.status||op.value});
+  }
+  if(type==='meta'||type==='updateMeta'||type==='updateFeatureMeta'){
+    return apiPost({action:'updateFeatureMeta',featureId:op.featureId||op.id,field:op.field,value:op.value});
+  }
+  if(type==='details'||type==='updateDetails'||type==='updateFeatureDetails'){
+    return apiPost({action:'updateFeatureDetails',featureId:op.featureId||op.id,arabicName:op.arabicName,englishName:op.englishName,phase:op.phase,priority:op.priority,status:op.status});
+  }
+  if(type==='note'||type==='saveNote'){
+    return apiPost({action:'saveNote',featureId:op.featureId||op.id,note:op.note,source:op.source||'User Note'});
+  }
+  if(type==='addFeature'||type==='addNewFeature'){
+    return apiPost(Object.assign({},op,{action:'addFeature'}));
+  }
+  return Promise.reject(new Error('unknown_operation:'+type));
+}
+function legacySaveMany(ops){
+  const results=[];
+  let chain=Promise.resolve();
+  ops.forEach((op,index)=>{
+    chain=chain.then(()=>legacySaveOne(op).then(r=>{
+      if(!r||!r.ok)throw new Error((r&&r.error)||'Legacy save failed');
+      const type=String(op.type||op.kind||op.action||'').trim();
+      results.push(Object.assign({ok:true,index,type,featureId:op.featureId||op.id},r));
+    }).catch(e=>{
+      results.push({ok:false,index,type:String(op.type||op.kind||op.action||''),featureId:op.featureId||op.id,error:String(e&&e.message?e.message:e)});
+    }));
+  });
+  return chain.then(()=>{
+    const hasError=results.some(x=>!x.ok);
+    return {ok:!hasError,partial:hasError,saved:results.filter(x=>x.ok).length,results};
+  });
+}
+function isUnknownSaveChangesError(r,err){
+  const txt=String((r&&r.error)||err||'');
+  return /unknown_action:saveChanges|unknown_action|saveChanges/i.test(txt);
+}
+let __saveChain=Promise.resolve();
+let __saveBatchOps=[];
+let __saveBatchJobs=[];
+let __saveBatchTimer=null;
+const SAVE_QUEUE_DEBOUNCE_MS=700;
+const SAVE_QUEUE_MAX_OPS=25;
 function __postSaveChanges(ops,attempt){
   return apiPost({action:'saveChanges',operations:ops}).then(r=>{
-    const err=String((r&&r.error)||'');
+    if(isUnknownSaveChangesError(r,''))return legacySaveMany(ops);
     const failed=(r&&Array.isArray(r.results))?(r.results.find(x=>!x.ok)||null):null;
+    const err=String((r&&r.error)||'');
     const ferr=String((failed&&failed.error)||'');
-    const busy=/busy_try_again|Service invoked too many times|Lock|timeout/i.test(err+' '+ferr);
-    if((!r || (!r.ok && !r.partial) || (r.partial && (!r.saved || r.saved<ops.length))) && busy && attempt<5){
+    const busy=/busy_try_again|Service invoked too many times|Lock|timeout|Exceeded maximum execution/i.test(err+' '+ferr);
+    if((!r||(!r.ok&&!r.partial)||(r.partial&&(!r.saved||r.saved<ops.length)))&&busy&&attempt<6){
       return __sleep(650*(attempt+1)).then(()=>__postSaveChanges(ops,attempt+1));
     }
     if(!r||!(r.ok||r.partial))throw new Error(err||'Save failed');
-    if(r.partial&&(!r.saved||r.saved<ops.length))throw new Error(((r.results||[]).find(x=>!x.ok)||{}).error||'Partial save failed');
+    if(r.partial&&(!r.saved||r.saved<ops.length)){
+      // if the new batch endpoint failed on a specific operation, try the old endpoint only for failed operations once.
+      const bad=(r.results||[]).filter(x=>!x.ok);
+      if(bad.length&&attempt<1){
+        const retryOps=bad.map(x=>ops[Number(x.index)]).filter(Boolean);
+        return legacySaveMany(retryOps).then(rr=>{
+          if(!rr.ok)throw new Error(((rr.results||[]).find(x=>!x.ok)||{}).error||((r.results||[]).find(x=>!x.ok)||{}).error||'Partial save failed');
+          return Object.assign({},r,{ok:true,partial:false,saved:ops.length});
+        });
+      }
+      throw new Error(((r.results||[]).find(x=>!x.ok)||{}).error||'Partial save failed');
+    }
     applyServerActivity(r);
     return r;
+  }).catch(err=>{
+    if(isUnknownSaveChangesError(null,err))return legacySaveMany(ops);
+    throw err;
   });
 }
 function __flushSaveBatch(){
   if(__saveBatchTimer){clearTimeout(__saveBatchTimer);__saveBatchTimer=null;}
   const ops=__saveBatchOps.splice(0,__saveBatchOps.length);
   const jobs=__saveBatchJobs.splice(0,__saveBatchJobs.length);
-  if(!ops.length)return;
+  if(!ops.length)return Promise.resolve({ok:true,saved:0,results:[]});
   const run=()=>__postSaveChanges(ops,0).then(r=>{
     jobs.forEach(j=>{
       const allResults=Array.isArray(r.results)?r.results:[];
-      const subResults=allResults
-        .filter(x=>Number(x.index)>=j.start && Number(x.index)<j.start+j.len)
-        .map(x=>Object.assign({},x,{index:Number(x.index)-j.start}));
+      const subResults=allResults.filter(x=>Number(x.index)>=j.start&&Number(x.index)<j.start+j.len).map(x=>Object.assign({},x,{index:Number(x.index)-j.start}));
       const scoped=Object.assign({},r,{results:subResults.length?subResults:allResults});
       j.resolve(scoped);
     });
     return r;
-  }).catch(err=>{jobs.forEach(j=>j.reject(err));throw err;});
+  }).catch(err=>{jobs.forEach(j=>j.reject(err));});
   const p=__saveChain.then(run,run);
   __saveChain=p.catch(()=>{});
   return p;
@@ -1942,11 +1996,10 @@ function serverSave(operations){
   return new Promise((resolve,reject)=>{
     const start=__saveBatchOps.length;
     __saveBatchOps.push(...ops);
-    __saveBatchJobs.push({start:start,len:ops.length,resolve:resolve,reject:reject});
-    // Batch queue: several edits made close together are sent as one request.
-    // It does NOT save on every typed character; text fields save only on blur/change.
+    __saveBatchJobs.push({start,len:ops.length,resolve,reject});
     if(__saveBatchOps.length>=SAVE_QUEUE_MAX_OPS){__flushSaveBatch();return;}
     if(__saveBatchTimer)clearTimeout(__saveBatchTimer);
+    // Important: this saves AFTER the user pauses/changes field; it does not interrupt typing.
     __saveBatchTimer=setTimeout(__flushSaveBatch,SAVE_QUEUE_DEBOUNCE_MS);
   });
 }
@@ -3088,9 +3141,7 @@ function afterSheetWrite(ok,err,onSuccessLocalCleanup){
     if(onSuccessLocalCleanup)onSuccessLocalCleanup();
     showSaveIndicator('saved');
     toast(tr('amSheetSynced'),'check');
-    const y=window.scrollY;
-    // Refresh data from Google Sheet without browser reload so newly-added features use their real Sheet IDs.
-    loadOnline(false).then(()=>window.scrollTo({top:y,left:0,behavior:'auto'})).catch(()=>{});
+    renderCategories(false);renderMainDashboard(false);const active=document.querySelector('.view.active');if(active&&active.id==='dashboardView')renderDashboard(false);if(active&&active.id==='trackerView')paintFeatures();
   }else{
     showSaveIndicator('failed');
     toast(tr('amSheetFailed')+(err?(': '+err):''),'error');
@@ -3351,27 +3402,6 @@ function submitAddMain(){
 function amApplyRows(cat,mainName,mainNameAr,rows){
   const n=today();
   const existing=findMainByName(cat,mainName);
-  // Online mode: save to Google Sheet first, then reload data from the sheet.
-  // This avoids temporary local IDs that caused newly-added features to fail on later edits.
-  if(mode==='online'&&USE_SHEET){
-    const btn=document.getElementById('amSaveBtn');
-    if(btn)btn.disabled=true;
-    showSaveIndicator('saving');
-    pushAddedToSheet(buildAddSpecs(cat, existing?(existing.mainFeature||mainName):mainName, existing?(existing.arabicName||mainNameAr):mainNameAr, rows),(ok,err)=>{
-      if(btn)btn.disabled=false;
-      if(ok){
-        closeAddMain();
-        showSaveIndicator('saved');
-        toast(existing?amT('تمت الإضافة إلى الخاصية الموجودة','Added to existing feature'):amT('تمت إضافة الخاصية الجديدة','New feature added'),'check');
-        const y=window.scrollY;
-        loadOnline(false).then(()=>window.scrollTo({top:y,left:0,behavior:'auto'})).catch(()=>{});
-      }else{
-        showSaveIndicator('failed');
-        toast(tr('amSheetFailed')+(err?(': '+err):''),'error');
-      }
-    });
-    return;
-  }
   if(existing){
     const subs=existing.subFeatures||(existing.subFeatures=[]);
     const dno=String(existing.displayNo||(DATA.mains.indexOf(existing)+1));
